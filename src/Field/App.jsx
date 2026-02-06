@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, onConnectionChange, NT_CONFIG } from '../networktables';
+import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, NT_CONFIG } from '../networktables';
 import './App.css';
 
 const FIELD = {
@@ -17,6 +17,9 @@ function App() {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [fieldRotation, setFieldRotation] = useState('vertical');
   const [imageLoaded, setImageLoaded] = useState(false);
+
+  const [robotPose, setRobotPose] = useState({ x: 5, y: 5, rotation: -Math.PI / 2 });
+
   const fieldRef = useRef(null);
 
   const GRID_SPACING = 28;
@@ -32,7 +35,6 @@ function App() {
     onConnectionChange((connected) => {
       setNtStatus(prev => ({ ...prev, connected }));
 
-      // Clear targets when connected
       if (connected) {
         setTargets([]);
       }
@@ -42,9 +44,12 @@ function App() {
       setNtStatus(prev => ({ ...prev, connected }));
 
       if (connected) {
-        setTargets([]); // Clear on initial connect too
+        setTargets([]);
         subscribeToAlliance((color) => {
           if (color === 'red' || color === 'blue') setAlliance(color);
+        });
+        subscribeToRobotPose((pose) => {
+          setRobotPose(pose);
         });
       }
     }).catch((err) => {
@@ -68,26 +73,31 @@ function App() {
     if (dimensions.width === 0 || dimensions.height === 0) return;
     if (!imageLoaded) return;
 
-    const img = fieldRef.current?.querySelector('img');
-    if (!img) return;
+    // Small delay to ensure CSS transforms have applied
+    const timeout = setTimeout(() => {
+      const img = fieldRef.current?.querySelector('img');
+      if (!img) return;
 
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fieldRef.current.getBoundingClientRect();
+      const imgRect = img.getBoundingClientRect();
+      const containerRect = fieldRef.current.getBoundingClientRect();
 
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
-    const imgRight = imgLeft + imgRect.width;
-    const imgBottom = imgTop + imgRect.height;
+      const imgLeft = imgRect.left - containerRect.left;
+      const imgTop = imgRect.top - containerRect.top;
+      const imgRight = imgLeft + imgRect.width;
+      const imgBottom = imgTop + imgRect.height;
 
-    const dots = [];
-    for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
-      for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
-        if (x > imgLeft && x < imgRight && y > imgTop && y < imgBottom) {
-          dots.push({ x, y });
+      const dots = [];
+      for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
+        for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
+          if (x > imgLeft && x < imgRight && y > imgTop && y < imgBottom) {
+            dots.push({ x, y });
+          }
         }
       }
-    }
-    setGridDots(dots);
+      setGridDots(dots);
+    }, 50);
+
+    return () => clearTimeout(timeout);
   }, [dimensions, alliance, fieldRotation, imageLoaded]);
 
   useEffect(() => {
@@ -103,83 +113,89 @@ function App() {
 
   // Convert screen coordinates to field coordinates based on alliance and rotation
   const screenToField = useCallback((screenX, screenY) => {
-    const img = fieldRef.current?.querySelector('img');
-    if (!img) return { x: 0, y: 0 };
+  const img = fieldRef.current?.querySelector('img');
+  if (!img) return { x: 0, y: 0 };
 
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fieldRef.current.getBoundingClientRect();
+  const imgRect = img.getBoundingClientRect();
+  const containerRect = fieldRef.current.getBoundingClientRect();
+  
+  const imgLeft = imgRect.left - containerRect.left;
+  const imgTop = imgRect.top - containerRect.top;
+  
+  const relX = (screenX - imgLeft) / imgRect.width;
+  const relY = (screenY - imgTop) / imgRect.height;
 
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
+  let fieldX, fieldY;
 
-    const relX = (screenX - imgLeft) / imgRect.width;
-    const relY = (screenY - imgTop) / imgRect.height;
+  // Original image: blue on RIGHT (X=651.2), red on LEFT (X=0)
+  // WPILib: X=0 at blue wall, so original image is flipped from WPILib
 
-    let fieldX, fieldY;
-
-    if (fieldRotation === 'vertical') {
-      if (alliance === 'blue') {
-        fieldX = (1 - relY) * FIELD.X;
-        fieldY = relX * FIELD.Y;
-      } else {
-        fieldX = relY * FIELD.X;
-        fieldY = (1 - relX) * FIELD.Y;
-      }
+  if (fieldRotation === 'horizontal') {
+    if (alliance === 'blue') {
+      // No rotation: blue on right, red on left
+      fieldX = (1 - relX) * FIELD.X;
+      fieldY = (1 - relY) * FIELD.Y;
     } else {
-      if (alliance === 'blue') {
-        fieldX = relX * FIELD.X;
-        fieldY = relY * FIELD.Y;
-      } else {
-        fieldX = (1 - relX) * FIELD.X;
-        fieldY = (1 - relY) * FIELD.Y;
-      }
+      // 180deg: red on right, blue on left
+      fieldX = relX * FIELD.X;
+      fieldY = relY * FIELD.Y;
     }
+  } else {
+    // Vertical
+    if (alliance === 'blue') {
+      // -90deg: blue at bottom
+      fieldX = (1 - relY) * FIELD.X;
+      fieldY = relX * FIELD.Y;
+    } else {
+      // 90deg: red at bottom
+      fieldX = relY * FIELD.X;
+      fieldY = (1 - relX) * FIELD.Y;
+    }
+  }
 
-    return {
-      x: parseFloat(fieldX.toFixed(2)),
-      y: parseFloat(fieldY.toFixed(2))
-    };
-  }, [alliance, fieldRotation]);
+  return {
+    x: parseFloat(fieldX.toFixed(2)),
+    y: parseFloat(fieldY.toFixed(2))
+  };
+}, [alliance, fieldRotation]);
 
   // Convert field coordinates back to screen position for rendering targets
   const fieldToScreen = useCallback((fieldX, fieldY) => {
-    const img = fieldRef.current?.querySelector('img');
-    if (!img) return { x: 0, y: 0 };
+  const img = fieldRef.current?.querySelector('img');
+  if (!img) return { x: 0, y: 0 };
 
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fieldRef.current.getBoundingClientRect();
+  const imgRect = img.getBoundingClientRect();
+  const containerRect = fieldRef.current.getBoundingClientRect();
+  
+  const imgLeft = imgRect.left - containerRect.left;
+  const imgTop = imgRect.top - containerRect.top;
 
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
+  let relX, relY;
 
-    const imgX = fieldX / FIELD.X;
-    const imgY = fieldY / FIELD.Y;
-
-    let relX, relY;
-
-    if (fieldRotation === 'vertical') {
-      if (alliance === 'blue') {
-        relX = imgY;
-        relY = 1 - imgX;
-      } else {
-        relX = 1 - imgY;
-        relY = imgX;
-      }
+  if (fieldRotation === 'horizontal') {
+    if (alliance === 'blue') {
+      relX = 1 - fieldX / FIELD.X;
+      relY = 1 - fieldY / FIELD.Y;
     } else {
-      if (alliance === 'blue') {
-        relX = imgX;
-        relY = imgY;
-      } else {
-        relX = 1 - imgX;
-        relY = 1 - imgY;
-      }
+      relX = fieldX / FIELD.X;
+      relY = fieldY / FIELD.Y;
     }
+  } else {
+    // Vertical
+    if (alliance === 'blue') {
+      relX = fieldY / FIELD.Y;
+      relY = 1 - fieldX / FIELD.X;
+    } else {
+      relX = 1 - fieldY / FIELD.Y;
+      relY = fieldX / FIELD.X;
+    }
+  }
 
-    return {
-      x: relX * imgRect.width + imgLeft,
-      y: relY * imgRect.height + imgTop,
-    };
-  }, [alliance, fieldRotation]);
+  return {
+    x: relX * imgRect.width + imgLeft,
+    y: relY * imgRect.height + imgTop,
+  };
+}, [alliance, fieldRotation]);
 
   // Handle field clicks to set targets
   const handleFieldClick = useCallback((e) => {
@@ -297,6 +313,39 @@ function App() {
     };
   };
 
+  const getRobotScreenPosition = useCallback(() => {
+  const screenPos = fieldToScreen(robotPose.x, robotPose.y);
+  
+  let screenRotation;
+  
+  // WPILib: 0 rad = facing positive X (toward red wall), CCW positive
+  
+  if (fieldRotation === 'horizontal') {
+    if (alliance === 'blue') {
+      // Blue on right (high X), red on left - facing red = facing LEFT
+      screenRotation = -robotPose.rotation + Math.PI;
+    } else {
+      // Red on right, blue on left - facing red = facing RIGHT
+      screenRotation = -robotPose.rotation;
+    }
+  } else {
+    // Vertical
+    if (alliance === 'blue') {
+      // Blue at bottom, red at top - facing red = facing UP
+      screenRotation = -robotPose.rotation - Math.PI / 2;
+    } else {
+      // Red at bottom, blue at top - facing red = facing DOWN
+      screenRotation = -robotPose.rotation + Math.PI / 2;
+    }
+  }
+  
+  return {
+    x: screenPos.x,
+    y: screenPos.y,
+    rotation: screenRotation,
+  };
+}, [robotPose, fieldToScreen, fieldRotation, alliance]);
+
   return (
     <div className={`app ${alliance}`}>
       <div
@@ -348,6 +397,22 @@ function App() {
             </div>
           );
         })}
+
+        {(() => {
+          const robotScreen = getRobotScreenPosition();
+          return (
+            <div
+              className="robot-marker"
+              style={{
+                left: robotScreen.x,
+                top: robotScreen.y,
+                transform: `translate(-50%, -50%) rotate(${robotScreen.rotation}rad)`,
+              }}
+            >
+              <div className="robot-triangle" />
+            </div>
+          );
+        })()}
 
         {mousePos && (
           <div
