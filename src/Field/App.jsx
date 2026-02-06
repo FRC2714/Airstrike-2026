@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, onConnectionChange, NT_CONFIG } from './networktables';
+import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, onConnectionChange, NT_CONFIG } from '../networktables';
 import './App.css';
 
 const FIELD = {
@@ -9,12 +9,13 @@ const FIELD = {
 
 function App() {
   const [ntStatus, setNtStatus] = useState({ connected: false, ip: '' });
-  const [hudOpen, setHudOpen] = useState(false);
+  const [hudOpen, setHudOpen] = useState(true);
   const [alliance, setAlliance] = useState('red');
   const [targets, setTargets] = useState([]);
   const [mousePos, setMousePos] = useState(null);
   const [hoveredDot, setHoveredDot] = useState(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [fieldRotation, setFieldRotation] = useState('vertical'); // 'vertical' or 'horizontal'
   const fieldRef = useRef(null);
 
   const GRID_SPACING = 28;
@@ -57,16 +58,29 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (dimensions.width === 0 || dimensions.height === 0) return;
+  if (dimensions.width === 0 || dimensions.height === 0) return;
 
-    const dots = [];
-    for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
-      for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
+  const img = fieldRef.current?.querySelector('img');
+  if (!img) return;
+
+  const imgRect = img.getBoundingClientRect();
+  const containerRect = fieldRef.current.getBoundingClientRect();
+  
+  const imgLeft = imgRect.left - containerRect.left;
+  const imgTop = imgRect.top - containerRect.top;
+  const imgRight = imgLeft + imgRect.width;
+  const imgBottom = imgTop + imgRect.height;
+
+  const dots = [];
+  for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
+    for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
+      if (x > imgLeft && x < imgRight && y > imgTop && y < imgBottom) {
         dots.push({ x, y });
       }
     }
-    setGridDots(dots);
-  }, [dimensions]);
+  }
+  setGridDots(dots);
+}, [dimensions, alliance, fieldRotation]);  // <-- add fieldRotation here
 
   useEffect(() => {
     if (targets.length === 0) return;
@@ -83,70 +97,78 @@ function App() {
     const img = fieldRef.current?.querySelector('img');
     if (!img) return { x: 0, y: 0 };
 
-    const container = fieldRef.current.getBoundingClientRect();
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = fieldRef.current.getBoundingClientRect();
 
-    const imgNatural = { w: img.naturalWidth, h: img.naturalHeight };
-    const imgAspect = imgNatural.w / imgNatural.h;
-    const containerAspect = container.width / container.height;
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
 
-    let rendered, offset;
+    const relX = (screenX - imgLeft) / imgRect.width;
+    const relY = (screenY - imgTop) / imgRect.height;
 
-    if (containerAspect > imgAspect) {
-      rendered = { w: container.width, h: container.width / imgAspect };
-      offset = { x: 0, y: (container.height - rendered.h) / 2 };
+    let fieldX, fieldY;
+
+    if (fieldRotation === 'vertical') {
+      if (alliance === 'blue') {
+        fieldX = (1 - relY) * FIELD.X;
+        fieldY = relX * FIELD.Y;
+      } else {
+        fieldX = relY * FIELD.X;
+        fieldY = (1 - relX) * FIELD.Y;
+      }
     } else {
-      rendered = { w: container.height * imgAspect, h: container.height };
-      offset = { x: (container.width - rendered.w) / 2, y: 0 };
-    }
-
-    let imgX = (screenX - offset.x) / rendered.w;
-    let imgY = (screenY - offset.y) / rendered.h;
-
-    // Flip coordinates for red alliance (image is rotated 180deg)
-    if (alliance === 'red') {
-      imgX = 1 - imgX;
-      imgY = 1 - imgY;
+      // Horizontal
+      if (alliance === 'blue') {
+        fieldX = relX * FIELD.X;
+        fieldY = relY * FIELD.Y;
+      } else {
+        fieldX = (1 - relX) * FIELD.X;
+        fieldY = (1 - relY) * FIELD.Y;
+      }
     }
 
     return {
-      x: parseFloat((imgX * FIELD.X).toFixed(2)),
-      y: parseFloat((imgY * FIELD.Y).toFixed(2))
+      x: parseFloat(fieldX.toFixed(2)),
+      y: parseFloat(fieldY.toFixed(2))
     };
-  }, [alliance]);
+  }, [alliance, fieldRotation]);
 
   const fieldToScreen = useCallback((fieldX, fieldY) => {
-    const img = fieldRef.current?.querySelector('img');
-    if (!img) return { x: 0, y: 0 };
+  const img = fieldRef.current?.querySelector('img');
+  if (!img) return { x: 0, y: 0 };
 
-    const container = fieldRef.current.getBoundingClientRect();
-    const imgNatural = { w: img.naturalWidth, h: img.naturalHeight };
-    const imgAspect = imgNatural.w / imgNatural.h;
-    const containerAspect = container.width / container.height;
+  const imgRect = img.getBoundingClientRect();
+  const containerRect = fieldRef.current.getBoundingClientRect();
+  
+  const imgLeft = imgRect.left - containerRect.left;
+  const imgTop = imgRect.top - containerRect.top;
 
-    let rendered, offset;
+  let relX, relY;
 
-    if (containerAspect > imgAspect) {
-      rendered = { w: container.width, h: container.width / imgAspect };
-      offset = { x: 0, y: (container.height - rendered.h) / 2 };
+  if (fieldRotation === 'vertical') {
+    if (alliance === 'blue') {
+      relX = fieldY / FIELD.Y;
+      relY = 1 - (fieldX / FIELD.X);
     } else {
-      rendered = { w: container.height * imgAspect, h: container.height };
-      offset = { x: (container.width - rendered.w) / 2, y: 0 };
+      relX = 1 - (fieldY / FIELD.Y);
+      relY = fieldX / FIELD.X;
     }
-
-    let imgX = fieldX / FIELD.X;
-    let imgY = fieldY / FIELD.Y;
-
-    // Flip for red alliance
-    if (alliance === 'red') {
-      imgX = 1 - imgX;
-      imgY = 1 - imgY;
+  } else {
+    // Horizontal
+    if (alliance === 'blue') {
+      relX = fieldX / FIELD.X;
+      relY = fieldY / FIELD.Y;
+    } else {
+      relX = 1 - (fieldX / FIELD.X);
+      relY = 1 - (fieldY / FIELD.Y);
     }
+  }
 
-    return {
-      x: (imgX * rendered.w) + offset.x,
-      y: (imgY * rendered.h) + offset.y,
-    };
-  }, [alliance]);
+  return {
+    x: relX * imgRect.width + imgLeft,
+    y: relY * imgRect.height + imgTop,
+  };
+}, [alliance, fieldRotation]);
 
   const handleFieldClick = useCallback((e) => {
     if (!fieldRef.current) return;
@@ -252,7 +274,7 @@ function App() {
         <img
           src="/2026RebuiltField.png"
           alt="Field"
-          className={`field-image ${alliance === 'red' ? 'flipped' : ''}`}
+          className={`field-image ${alliance} ${fieldRotation}`}
         />
 
         <div className="grid-overlay">
@@ -330,6 +352,18 @@ function App() {
                     : '--'
                   }
                 </span>
+              </div>
+              <div className="hud-row">
+                <span className="hud-label">VIEW</span>
+                <button
+                  className="hud-rotate-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFieldRotation(prev => prev === 'vertical' ? 'horizontal' : 'vertical');
+                  }}
+                >
+                  {fieldRotation === 'vertical' ? 'VERTICAL' : 'HORIZONTAL'}
+                </button>
               </div>
             </div>
           )}
