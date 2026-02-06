@@ -15,27 +15,34 @@ function App() {
   const [mousePos, setMousePos] = useState(null);
   const [hoveredDot, setHoveredDot] = useState(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
-  const [fieldRotation, setFieldRotation] = useState('vertical'); // 'vertical' or 'horizontal'
+  const [fieldRotation, setFieldRotation] = useState('vertical');
+  const [imageLoaded, setImageLoaded] = useState(false);
   const fieldRef = useRef(null);
 
   const GRID_SPACING = 28;
   const [gridDots, setGridDots] = useState([]);
 
+  // ALL UPDATES IN 4 EFFECTS
   useEffect(() => {
     const team = NT_CONFIG.TEAM_NUMBER;
     const ip = team > 0 ? `10.${Math.floor(team / 100)}.${team % 100}.2` : NT_CONFIG.SERVER;
 
     setNtStatus(prev => ({ ...prev, ip }));
 
-    // Listen for connection changes
     onConnectionChange((connected) => {
       setNtStatus(prev => ({ ...prev, connected }));
+
+      // Clear targets when connected
+      if (connected) {
+        setTargets([]);
+      }
     });
 
     initNetworkTables().then((connected) => {
       setNtStatus(prev => ({ ...prev, connected }));
 
       if (connected) {
+        setTargets([]); // Clear on initial connect too
         subscribeToAlliance((color) => {
           if (color === 'red' || color === 'blue') setAlliance(color);
         });
@@ -58,29 +65,30 @@ function App() {
   }, []);
 
   useEffect(() => {
-  if (dimensions.width === 0 || dimensions.height === 0) return;
+    if (dimensions.width === 0 || dimensions.height === 0) return;
+    if (!imageLoaded) return;
 
-  const img = fieldRef.current?.querySelector('img');
-  if (!img) return;
+    const img = fieldRef.current?.querySelector('img');
+    if (!img) return;
 
-  const imgRect = img.getBoundingClientRect();
-  const containerRect = fieldRef.current.getBoundingClientRect();
-  
-  const imgLeft = imgRect.left - containerRect.left;
-  const imgTop = imgRect.top - containerRect.top;
-  const imgRight = imgLeft + imgRect.width;
-  const imgBottom = imgTop + imgRect.height;
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = fieldRef.current.getBoundingClientRect();
 
-  const dots = [];
-  for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
-    for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
-      if (x > imgLeft && x < imgRight && y > imgTop && y < imgBottom) {
-        dots.push({ x, y });
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
+    const imgRight = imgLeft + imgRect.width;
+    const imgBottom = imgTop + imgRect.height;
+
+    const dots = [];
+    for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
+      for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
+        if (x > imgLeft && x < imgRight && y > imgTop && y < imgBottom) {
+          dots.push({ x, y });
+        }
       }
     }
-  }
-  setGridDots(dots);
-}, [dimensions, alliance, fieldRotation]);  // <-- add fieldRotation here
+    setGridDots(dots);
+  }, [dimensions, alliance, fieldRotation, imageLoaded]);
 
   useEffect(() => {
     if (targets.length === 0) return;
@@ -93,6 +101,7 @@ function App() {
     return () => clearTimeout(timer);
   }, [targets]);
 
+  // Convert screen coordinates to field coordinates based on alliance and rotation
   const screenToField = useCallback((screenX, screenY) => {
     const img = fieldRef.current?.querySelector('img');
     if (!img) return { x: 0, y: 0 };
@@ -117,7 +126,6 @@ function App() {
         fieldY = (1 - relX) * FIELD.Y;
       }
     } else {
-      // Horizontal
       if (alliance === 'blue') {
         fieldX = relX * FIELD.X;
         fieldY = relY * FIELD.Y;
@@ -133,43 +141,47 @@ function App() {
     };
   }, [alliance, fieldRotation]);
 
+  // Convert field coordinates back to screen position for rendering targets
   const fieldToScreen = useCallback((fieldX, fieldY) => {
-  const img = fieldRef.current?.querySelector('img');
-  if (!img) return { x: 0, y: 0 };
+    const img = fieldRef.current?.querySelector('img');
+    if (!img) return { x: 0, y: 0 };
 
-  const imgRect = img.getBoundingClientRect();
-  const containerRect = fieldRef.current.getBoundingClientRect();
-  
-  const imgLeft = imgRect.left - containerRect.left;
-  const imgTop = imgRect.top - containerRect.top;
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = fieldRef.current.getBoundingClientRect();
 
-  let relX, relY;
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
 
-  if (fieldRotation === 'vertical') {
-    if (alliance === 'blue') {
-      relX = fieldY / FIELD.Y;
-      relY = 1 - (fieldX / FIELD.X);
+    const imgX = fieldX / FIELD.X;
+    const imgY = fieldY / FIELD.Y;
+
+    let relX, relY;
+
+    if (fieldRotation === 'vertical') {
+      if (alliance === 'blue') {
+        relX = imgY;
+        relY = 1 - imgX;
+      } else {
+        relX = 1 - imgY;
+        relY = imgX;
+      }
     } else {
-      relX = 1 - (fieldY / FIELD.Y);
-      relY = fieldX / FIELD.X;
+      if (alliance === 'blue') {
+        relX = imgX;
+        relY = imgY;
+      } else {
+        relX = 1 - imgX;
+        relY = 1 - imgY;
+      }
     }
-  } else {
-    // Horizontal
-    if (alliance === 'blue') {
-      relX = fieldX / FIELD.X;
-      relY = fieldY / FIELD.Y;
-    } else {
-      relX = 1 - (fieldX / FIELD.X);
-      relY = 1 - (fieldY / FIELD.Y);
-    }
-  }
 
-  return {
-    x: relX * imgRect.width + imgLeft,
-    y: relY * imgRect.height + imgTop,
-  };
-}, [alliance, fieldRotation]);
+    return {
+      x: relX * imgRect.width + imgLeft,
+      y: relY * imgRect.height + imgTop,
+    };
+  }, [alliance, fieldRotation]);
 
+  // Handle field clicks to set targets
   const handleFieldClick = useCallback((e) => {
     if (!fieldRef.current) return;
 
@@ -177,7 +189,26 @@ function App() {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
 
+    // Check if click is within image bounds
+    const img = fieldRef.current.querySelector('img');
+    if (!img) return;
+
+    const imgRect = img.getBoundingClientRect();
+    const imgLeft = imgRect.left - rect.left;
+    const imgTop = imgRect.top - rect.top;
+    const imgRight = imgLeft + imgRect.width;
+    const imgBottom = imgTop + imgRect.height;
+
+    if (screenX < imgLeft || screenX > imgRight || screenY < imgTop || screenY > imgBottom) {
+      return;
+    }
+
     const fieldCoords = screenToField(screenX, screenY);
+
+    // Validate field coordinates are within bounds
+    if (fieldCoords.x < 0 || fieldCoords.x > FIELD.X || fieldCoords.y < 0 || fieldCoords.y > FIELD.Y) {
+      return;
+    }
 
     const newTarget = {
       id: `target-${Date.now()}`,
@@ -188,13 +219,16 @@ function App() {
       timestamp: Date.now(),
     };
 
-    console.log(`AIRSTRYKE TARGET - X: ${fieldCoords.x}, Y: ${fieldCoords.y}`);
+    // console.log(`AIRSTRYKE TARGET - X: ${fieldCoords.x}, Y: ${fieldCoords.y}`);
 
-    publishTarget({ x: fieldCoords.x, y: fieldCoords.y });
+    if (ntStatus.connected) {
+      publishTarget({ x: fieldCoords.x, y: fieldCoords.y });
+    }
 
     setTargets([newTarget]);
-  }, [screenToField]);
+  }, [screenToField, ntStatus.connected]);
 
+  // Handle mouse movement to find nearest grid dot and calculate dynamic styles
   const handleMouseMove = useCallback((e) => {
     if (!fieldRef.current) return;
 
@@ -218,6 +252,7 @@ function App() {
     setHoveredDot(nearestDot);
   }, [gridDots]);
 
+  // Calculate dynamic styles for grid dots based on mouse and target proximity
   const getDotStyle = (dot) => {
     let offsetX = 0;
     let offsetY = 0;
@@ -275,6 +310,7 @@ function App() {
           src="/2026RebuiltField.png"
           alt="Field"
           className={`field-image ${alliance} ${fieldRotation}`}
+          onLoad={() => setImageLoaded(true)}
         />
 
         <div className="grid-overlay">

@@ -18,7 +18,7 @@ export async function initNetworkTables(teamNumber) {
   ntClient = NetworkTables.getInstanceByURI(server);
   
   ntClient.addRobotConnectionListener((connected) => {
-    console.log(connected ? 'Connected to NetworkTables' : 'Disconnected from NetworkTables');
+    // console.log(connected ? 'Connected to NetworkTables' : 'Disconnected from NetworkTables');
     if (connectionCallback) {
       connectionCallback(connected);
     }
@@ -31,7 +31,7 @@ export async function initNetworkTables(teamNumber) {
   await targetXTopic.publish({ defaultValue: 0 });
   await targetYTopic.publish({ defaultValue: 0 });
   
-  console.log('NetworkTables initialized');
+  // console.log('NetworkTables initialized');
   return true;
 }
 
@@ -47,7 +47,7 @@ export function publishTarget(target) {
   
   targetXTopic.setValue(target.x);
   targetYTopic.setValue(target.y);
-  console.log(`Published: X=${target.x}, Y=${target.y}`);
+  // console.log(`Published: X=${target.x}, Y=${target.y}`);
 }
 
 export function clearTarget() {
@@ -61,7 +61,7 @@ export function subscribeToAlliance(callback) {
   if (!allianceTopic) return null;
   
   const subId = allianceTopic.subscribe((value) => {
-    console.log('Alliance value:', value);
+    // console.log('Alliance value:', value);
     if (typeof value === 'boolean') {
       callback(value ? 'red' : 'blue');
     }
