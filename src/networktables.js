@@ -25,8 +25,8 @@ export async function initNetworkTables(teamNumber) {
     }
   });
   
-  targetXTopic = ntClient.createTopic('/SmartDashboard/airstryke/x', NetworkTablesTypeInfos.kDouble);
-  targetYTopic = ntClient.createTopic('/SmartDashboard/airstryke/y', NetworkTablesTypeInfos.kDouble);
+  targetXTopic = ntClient.createTopic('/SmartDashboard/airstrike/x', NetworkTablesTypeInfos.kDouble);
+  targetYTopic = ntClient.createTopic('/SmartDashboard/airstrike/y', NetworkTablesTypeInfos.kDouble);
   allianceTopic = ntClient.createTopic('/FMSInfo/IsRedAlliance', NetworkTablesTypeInfos.kBoolean);
   
   await targetXTopic.publish({ defaultValue: 0 });
