@@ -238,7 +238,7 @@ function App() {
     // console.log(`AIRSTRYKE TARGET - X: ${fieldCoords.x}, Y: ${fieldCoords.y}`);
 
     if (ntStatus.connected) {
-      publishTarget({ x: fieldCoords.x, y: fieldCoords.y });
+      publishTarget({ x: FIELD.X - fieldCoords.x, y: FIELD.Y - fieldCoords.y });
     }
 
     setTargets([newTarget]);
