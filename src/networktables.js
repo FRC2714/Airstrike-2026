@@ -1,7 +1,7 @@
 import { NetworkTables, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 const CONFIG = {
-  TEAM_NUMBER: 0,
+  TEAM_NUMBER: 2714,
   SERVER: '127.0.0.1',
 };
 
