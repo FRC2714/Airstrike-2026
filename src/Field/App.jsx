@@ -7,6 +7,22 @@ const FIELD = {
   Y: 317.7,
 };
 
+// Define preset zones for each alliance
+// Red team starts on the left side (X = 0)
+// Blue team starts on the right side (X = 651.2)
+const ZONES = {
+  red: {
+    LEFT: { x: 555.4, y: 259, label: 'LEFT ZONE' },      // Closest to red wall
+    MIDDLE: { x: 556.8, y: 159, label: 'MIDDLE ZONE' },  // Center
+    RIGHT: { x: 563, y: 60.8, label: 'RIGHT ZONE' },    // Far from red wall
+  },
+  blue: {
+    LEFT: { x: 93, y: 57, label: 'LEFT ZONE' },      // Far from blue wall (flipped)
+    MIDDLE: { x: 96.5, y: 159, label: 'MIDDLE ZONE' },  // Center (same)
+    RIGHT: { x: 95, y: 263, label: 'RIGHT ZONE' },    // Closest to blue wall (flipped)
+  },
+};
+
 function App() {
   const [ntStatus, setNtStatus] = useState({ connected: false, ip: '' });
   const [hudOpen, setHudOpen] = useState(true);
@@ -235,14 +251,36 @@ function App() {
       timestamp: Date.now(),
     };
 
-    // console.log(`AIRSTRYKE TARGET - X: ${fieldCoords.x}, Y: ${fieldCoords.y}`);
-
     if (ntStatus.connected) {
       publishTarget({ x: FIELD.X - fieldCoords.x, y: FIELD.Y - fieldCoords.y });
     }
 
     setTargets([newTarget]);
   }, [screenToField, ntStatus.connected]);
+
+  // Handle preset zone buttons - gets current alliance's zones
+  const handleZoneClick = useCallback((zone) => {
+    const fieldCoords = zone;
+
+    const newTarget = {
+      id: `target-${Date.now()}`,
+      fieldX: fieldCoords.x,
+      fieldY: fieldCoords.y,
+      timestamp: Date.now(),
+    };
+
+    if (ntStatus.connected) {
+      publishTarget({ x: FIELD.X - fieldCoords.x, y: FIELD.Y - fieldCoords.y });
+    }
+
+    setTargets([newTarget]);
+  }, [ntStatus.connected]);
+
+  // Handle clear target button
+  const handleClearTarget = useCallback(() => {
+    setTargets([]);
+    clearTarget();
+  }, []);
 
   // Handle mouse movement to find nearest grid dot and calculate dynamic styles
   const handleMouseMove = useCallback((e) => {
@@ -346,6 +384,9 @@ function App() {
   };
 }, [robotPose, fieldToScreen, fieldRotation, alliance]);
 
+  // Get zones for current alliance
+  const currentZones = ZONES[alliance];
+
   return (
     <div className={`app ${alliance}`}>
       <div
@@ -424,6 +465,7 @@ function App() {
           </div>
         )}
 
+        {/* HUD - Top Left */}
         <div className={`hud ${hudOpen ? 'open' : ''}`}>
           <button className="hud-toggle" onClick={(e) => { e.stopPropagation(); setHudOpen(!hudOpen); }}>
             {hudOpen ? '✕' : '☰'}
@@ -469,6 +511,50 @@ function App() {
             </div>
           )}
         </div>
+
+      </div>
+
+      {/* RIGHT SIDEBAR - Zone buttons */}
+      <div className={`sidebar ${alliance}`}>
+        <div className="alliance-label">
+          {alliance.toUpperCase()}
+        </div>
+        
+        <button 
+          className="zone-btn right-zone"
+          onClick={() => handleZoneClick(currentZones.RIGHT)}
+          title="Set target to right zone"
+        >
+          <span className="btn-text">RIGHT</span>
+          <span className="btn-text">ZONE</span>
+        </button>
+
+        <button 
+          className="zone-btn middle-zone"
+          onClick={() => handleZoneClick(currentZones.MIDDLE)}
+          title="Set target to middle zone"
+        >
+          <span className="btn-text">MIDDLE</span>
+          <span className="btn-text">ZONE</span>
+        </button>
+        
+        <button 
+          className="zone-btn left-zone"
+          onClick={() => handleZoneClick(currentZones.LEFT)}
+          title="Set target to left zone"
+        >
+          <span className="btn-text">LEFT</span>
+          <span className="btn-text">ZONE</span>
+        </button>
+
+        <button 
+          className="zone-btn clear-btn"
+          onClick={handleClearTarget}
+          title="Clear target"
+        >
+          <span className="btn-text">CLEAR</span>
+          <span className="btn-text">TARGET</span>
+        </button>
       </div>
     </div>
   );
