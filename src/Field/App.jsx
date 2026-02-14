@@ -129,89 +129,81 @@ function App() {
 
   // Convert screen coordinates to field coordinates based on alliance and rotation
   const screenToField = useCallback((screenX, screenY) => {
-  const img = fieldRef.current?.querySelector('img');
-  if (!img) return { x: 0, y: 0 };
+    const img = fieldRef.current?.querySelector('img');
+    if (!img) return { x: 0, y: 0 };
 
-  const imgRect = img.getBoundingClientRect();
-  const containerRect = fieldRef.current.getBoundingClientRect();
-  
-  const imgLeft = imgRect.left - containerRect.left;
-  const imgTop = imgRect.top - containerRect.top;
-  
-  const relX = (screenX - imgLeft) / imgRect.width;
-  const relY = (screenY - imgTop) / imgRect.height;
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = fieldRef.current.getBoundingClientRect();
 
-  let fieldX, fieldY;
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
 
-  // Original image: blue on RIGHT (X=651.2), red on LEFT (X=0)
-  // WPILib: X=0 at blue wall, so original image is flipped from WPILib
+    const relX = (screenX - imgLeft) / imgRect.width;
+    const relY = (screenY - imgTop) / imgRect.height;
 
-  if (fieldRotation === 'horizontal') {
-    if (alliance === 'blue') {
-      // No rotation: blue on right, red on left
-      fieldX = (1 - relX) * FIELD.X;
-      fieldY = (1 - relY) * FIELD.Y;
+    let fieldX, fieldY;
+
+    if (fieldRotation === 'horizontal') {
+      if (alliance === 'blue') {
+        fieldX = (1 - relX) * FIELD.X;
+        fieldY = (1 - relY) * FIELD.Y;
+      } else {
+        fieldX = relX * FIELD.X;
+        fieldY = (1 - relY) * FIELD.Y;
+      }
     } else {
-      // 180deg: red on right, blue on left
-      fieldX = relX * FIELD.X;
-      fieldY = relY * FIELD.Y;
+      if (alliance === 'blue') {
+        fieldX = (1 - relY) * FIELD.X;
+        fieldY = relX * FIELD.Y;
+      } else {
+        fieldX = relY * FIELD.X;
+        fieldY = relX * FIELD.Y;
+      }
     }
-  } else {
-    // Vertical
-    if (alliance === 'blue') {
-      // -90deg: blue at bottom
-      fieldX = (1 - relY) * FIELD.X;
-      fieldY = relX * FIELD.Y;
-    } else {
-      // 90deg: red at bottom
-      fieldX = relY * FIELD.X;
-      fieldY = (1 - relX) * FIELD.Y;
-    }
-  }
 
-  return {
-    x: parseFloat(fieldX.toFixed(2)),
-    y: parseFloat(fieldY.toFixed(2))
-  };
-}, [alliance, fieldRotation]);
+    return {
+      x: parseFloat(fieldX.toFixed(2)),
+      y: parseFloat(fieldY.toFixed(2))
+    };
+  }, [alliance, fieldRotation]);
 
   // Convert field coordinates back to screen position for rendering targets
   const fieldToScreen = useCallback((fieldX, fieldY) => {
-  const img = fieldRef.current?.querySelector('img');
-  if (!img) return { x: 0, y: 0 };
+    const img = fieldRef.current?.querySelector('img');
+    if (!img) return { x: 0, y: 0 };
 
-  const imgRect = img.getBoundingClientRect();
-  const containerRect = fieldRef.current.getBoundingClientRect();
-  
-  const imgLeft = imgRect.left - containerRect.left;
-  const imgTop = imgRect.top - containerRect.top;
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = fieldRef.current.getBoundingClientRect();
 
-  let relX, relY;
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
 
-  if (fieldRotation === 'horizontal') {
-    if (alliance === 'blue') {
-      relX = 1 - fieldX / FIELD.X;
-      relY = 1 - fieldY / FIELD.Y;
+    let relX, relY;
+
+    if (fieldRotation === 'horizontal') {
+      if (alliance === 'blue') {
+        relX = 1 - fieldX / FIELD.X;
+        relY = 1 - fieldY / FIELD.Y;
+      } else {
+        relX = fieldX / FIELD.X;
+        relY = 1 - fieldY / FIELD.Y;
+      }
     } else {
-      relX = fieldX / FIELD.X;
-      relY = fieldY / FIELD.Y;
+      // Vertical
+      if (alliance === 'blue') {
+        relX = fieldY / FIELD.Y;
+        relY = 1 - fieldX / FIELD.X;
+      } else {
+        relX = fieldY / FIELD.Y;
+        relY = fieldX / FIELD.X;
+      }
     }
-  } else {
-    // Vertical
-    if (alliance === 'blue') {
-      relX = fieldY / FIELD.Y;
-      relY = 1 - fieldX / FIELD.X;
-    } else {
-      relX = 1 - fieldY / FIELD.Y;
-      relY = fieldX / FIELD.X;
-    }
-  }
 
-  return {
-    x: relX * imgRect.width + imgLeft,
-    y: relY * imgRect.height + imgTop,
-  };
-}, [alliance, fieldRotation]);
+    return {
+      x: relX * imgRect.width + imgLeft,
+      y: relY * imgRect.height + imgTop,
+    };
+  }, [alliance, fieldRotation]);
 
   // Handle field clicks to set targets
   const handleFieldClick = useCallback((e) => {
@@ -252,7 +244,7 @@ function App() {
     };
 
     if (ntStatus.connected) {
-      publishTarget({ x: FIELD.X - fieldCoords.x, y: FIELD.Y - fieldCoords.y });
+      publishTarget({ x: fieldCoords.x, y: fieldCoords.y });
     }
 
     setTargets([newTarget]);
@@ -270,7 +262,7 @@ function App() {
     };
 
     if (ntStatus.connected) {
-      publishTarget({ x: FIELD.X - fieldCoords.x, y: FIELD.Y - fieldCoords.y });
+      publishTarget({ x: fieldCoords.x, y: fieldCoords.y });
     }
 
     setTargets([newTarget]);
@@ -352,37 +344,37 @@ function App() {
   };
 
   const getRobotScreenPosition = useCallback(() => {
-  const screenPos = fieldToScreen(robotPose.x, robotPose.y);
-  
-  let screenRotation;
-  
-  // WPILib: 0 rad = facing positive X (toward red wall), CCW positive
-  
-  if (fieldRotation === 'horizontal') {
-    if (alliance === 'blue') {
-      // Blue on right (high X), red on left - facing red = facing LEFT
-      screenRotation = -robotPose.rotation + Math.PI;
+    const screenPos = fieldToScreen(robotPose.x, robotPose.y);
+
+    let screenRotation;
+
+    // WPILib: 0 rad = facing positive X (toward red wall), CCW positive
+
+    if (fieldRotation === 'horizontal') {
+      if (alliance === 'blue') {
+        // Blue on right (high X), red on left - facing red = facing LEFT
+        screenRotation = -robotPose.rotation + Math.PI;
+      } else {
+        // Red on right, blue on left - facing red = facing RIGHT
+        screenRotation = -robotPose.rotation;
+      }
     } else {
-      // Red on right, blue on left - facing red = facing RIGHT
-      screenRotation = -robotPose.rotation;
+      // Vertical
+      if (alliance === 'blue') {
+        // Blue at bottom, red at top - facing red = facing UP
+        screenRotation = -robotPose.rotation - Math.PI / 2;
+      } else {
+        // Red at bottom, blue at top - facing red = facing DOWN
+        screenRotation = -robotPose.rotation + Math.PI / 2;
+      }
     }
-  } else {
-    // Vertical
-    if (alliance === 'blue') {
-      // Blue at bottom, red at top - facing red = facing UP
-      screenRotation = -robotPose.rotation - Math.PI / 2;
-    } else {
-      // Red at bottom, blue at top - facing red = facing DOWN
-      screenRotation = -robotPose.rotation + Math.PI / 2;
-    }
-  }
-  
-  return {
-    x: screenPos.x,
-    y: screenPos.y,
-    rotation: screenRotation,
-  };
-}, [robotPose, fieldToScreen, fieldRotation, alliance]);
+
+    return {
+      x: screenPos.x,
+      y: screenPos.y,
+      rotation: screenRotation,
+    };
+  }, [robotPose, fieldToScreen, fieldRotation, alliance]);
 
   // Get zones for current alliance
   const currentZones = ZONES[alliance];
@@ -519,8 +511,8 @@ function App() {
         <div className="alliance-label">
           {alliance.toUpperCase()}
         </div>
-        
-        <button 
+
+        <button
           className="zone-btn right-zone"
           onClick={() => handleZoneClick(currentZones.RIGHT)}
           title="Set target to right zone"
@@ -529,7 +521,7 @@ function App() {
           <span className="btn-text">ZONE</span>
         </button>
 
-        <button 
+        <button
           className="zone-btn middle-zone"
           onClick={() => handleZoneClick(currentZones.MIDDLE)}
           title="Set target to middle zone"
@@ -537,8 +529,8 @@ function App() {
           <span className="btn-text">MIDDLE</span>
           <span className="btn-text">ZONE</span>
         </button>
-        
-        <button 
+
+        <button
           className="zone-btn left-zone"
           onClick={() => handleZoneClick(currentZones.LEFT)}
           title="Set target to left zone"
@@ -547,7 +539,7 @@ function App() {
           <span className="btn-text">ZONE</span>
         </button>
 
-        <button 
+        <button
           className="zone-btn clear-btn"
           onClick={handleClearTarget}
           title="Clear target"
