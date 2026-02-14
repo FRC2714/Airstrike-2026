@@ -116,16 +116,6 @@ function App() {
     return () => clearTimeout(timeout);
   }, [dimensions, alliance, fieldRotation, imageLoaded]);
 
-  useEffect(() => {
-    if (targets.length === 0) return;
-
-    const timer = setTimeout(() => {
-      setTargets([]);
-      clearTarget();
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [targets]);
 
   // Convert screen coordinates to field coordinates based on alliance and rotation
   const screenToField = useCallback((screenX, screenY) => {
