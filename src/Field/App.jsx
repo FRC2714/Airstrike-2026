@@ -37,6 +37,7 @@ function App() {
   const [robotPose, setRobotPose] = useState({ x: 5, y: 5, rotation: -Math.PI / 2 });
 
   const fieldRef = useRef(null);
+  const isDraggingRef = useRef(false);
 
   const GRID_SPACING = 28;
   const [gridDots, setGridDots] = useState([]);
@@ -195,39 +196,30 @@ function App() {
     };
   }, [alliance, fieldRotation]);
 
-  // Handle field clicks to set targets
-  const handleFieldClick = useCallback((e) => {
-    if (!fieldRef.current) return;
+  const setTargetFromScreen = useCallback((screenX, screenY) => {
+    if (!fieldRef.current) return false;
 
-    const rect = fieldRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-
-    // Check if click is within image bounds
+    const containerRect = fieldRef.current.getBoundingClientRect();
     const img = fieldRef.current.querySelector('img');
-    if (!img) return;
+    if (!img) return false;
 
     const imgRect = img.getBoundingClientRect();
-    const imgLeft = imgRect.left - rect.left;
-    const imgTop = imgRect.top - rect.top;
+    const imgLeft = imgRect.left - containerRect.left;
+    const imgTop = imgRect.top - containerRect.top;
     const imgRight = imgLeft + imgRect.width;
     const imgBottom = imgTop + imgRect.height;
 
     if (screenX < imgLeft || screenX > imgRight || screenY < imgTop || screenY > imgBottom) {
-      return;
+      return false;
     }
 
     const fieldCoords = screenToField(screenX, screenY);
-
-    // Validate field coordinates are within bounds
     if (fieldCoords.x < 0 || fieldCoords.x > FIELD.X || fieldCoords.y < 0 || fieldCoords.y > FIELD.Y) {
-      return;
+      return false;
     }
 
     const newTarget = {
       id: `target-${Date.now()}`,
-      screenX,
-      screenY,
       fieldX: fieldCoords.x,
       fieldY: fieldCoords.y,
       timestamp: Date.now(),
@@ -238,7 +230,28 @@ function App() {
     }
 
     setTargets([newTarget]);
+    return true;
   }, [screenToField, ntStatus.connected]);
+
+  // Handle field clicks to set targets
+  const handleFieldClick = useCallback((e) => {
+    if (!fieldRef.current) return;
+
+    const rect = fieldRef.current.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    setTargetFromScreen(screenX, screenY);
+  }, [setTargetFromScreen]);
+
+  const handleFieldMouseDown = useCallback((e) => {
+    if (!fieldRef.current || e.button !== 0) return;
+    if (e.target.closest('.hud')) return;
+
+    const rect = fieldRef.current.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    isDraggingRef.current = setTargetFromScreen(screenX, screenY);
+  }, [setTargetFromScreen]);
 
   // Handle preset zone buttons - gets current alliance's zones
   const handleZoneClick = useCallback((zone) => {
@@ -273,6 +286,9 @@ function App() {
     const y = e.clientY - rect.top;
 
     setMousePos({ x, y });
+    if (isDraggingRef.current) {
+      setTargetFromScreen(x, y);
+    }
 
     let nearestDot = null;
     let minDist = GRID_SPACING;
@@ -286,7 +302,16 @@ function App() {
     });
 
     setHoveredDot(nearestDot);
-  }, [gridDots]);
+  }, [gridDots, setTargetFromScreen]);
+
+  useEffect(() => {
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+    };
+
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, []);
 
   // Calculate dynamic styles for grid dots based on mouse and target proximity
   const getDotStyle = (dot) => {
@@ -375,8 +400,13 @@ function App() {
         ref={fieldRef}
         className="field"
         onClick={handleFieldClick}
+        onMouseDown={handleFieldMouseDown}
         onMouseMove={handleMouseMove}
-        onMouseLeave={() => { setMousePos(null); setHoveredDot(null); }}
+        onMouseLeave={() => {
+          setMousePos(null);
+          setHoveredDot(null);
+          isDraggingRef.current = false;
+        }}
       >
         <img
           src="/2026RebuiltField.png"
