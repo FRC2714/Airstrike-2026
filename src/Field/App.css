@@ -156,8 +156,8 @@ body {
 /* Robot pose marker */
 .robot-marker {
   position: absolute;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: 2px solid var(--red);
   background: rgba(0, 0, 0, 0.5);
   z-index: 150;
@@ -170,9 +170,9 @@ body {
   left: 50%;
   width: 0;
   height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 12px solid white;
+  border-left: 7.5px solid transparent;
+  border-right: 7.5px solid transparent;
+  border-bottom: 15px solid white;
   transform: translate(-50%, -50%) rotate(0deg);
   transform-origin: center center;
 }
