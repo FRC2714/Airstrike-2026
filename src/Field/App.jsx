@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, NT_CONFIG } from '../networktables';
+import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
 import './App.css';
 
 const FIELD = {
@@ -24,7 +24,7 @@ const ZONES = {
 };
 
 function App() {
-  const [ntStatus, setNtStatus] = useState({ connected: false, ip: '' });
+  const [ntStatus, setNtStatus] = useState({ connected: false, ip: '', mode: '' });
   const [hudOpen, setHudOpen] = useState(true);
   const [alliance, setAlliance] = useState('red');
   const [targets, setTargets] = useState([]);
@@ -44,11 +44,6 @@ function App() {
 
   // ALL UPDATES IN 4 EFFECTS
   useEffect(() => {
-    const team = NT_CONFIG.TEAM_NUMBER;
-    const ip = team > 0 ? `10.${Math.floor(team / 100)}.${team % 100}.2` : NT_CONFIG.SERVER;
-
-    setNtStatus(prev => ({ ...prev, ip }));
-
     onConnectionChange((connected) => {
       setNtStatus(prev => ({ ...prev, connected }));
 
@@ -57,18 +52,22 @@ function App() {
       }
     });
 
-    initNetworkTables().then((connected) => {
-      setNtStatus(prev => ({ ...prev, connected }));
+    initNetworkTables().then((robotConnected) => {
+      const server = getActiveServer();
+      setNtStatus(prev => ({
+        ...prev,
+        ip: server,
+        connected: robotConnected,
+        mode: robotConnected ? 'ROBOT' : 'SIM',
+      }));
 
-      if (connected) {
-        setTargets([]);
-        subscribeToAlliance((color) => {
-          if (color === 'red' || color === 'blue') setAlliance(color);
-        });
-        subscribeToRobotPose((pose) => {
-          setRobotPose(pose);
-        });
-      }
+      // Subscribe to topics — they'll start working once the client connects
+      subscribeToAlliance((color) => {
+        if (color === 'red' || color === 'blue') setAlliance(color);
+      });
+      subscribeToRobotPose((pose) => {
+        setRobotPose(pose);
+      });
     }).catch((err) => {
       console.warn('initNetworkTables failed:', err);
     });
@@ -367,20 +366,15 @@ function App() {
 
     if (fieldRotation === 'horizontal') {
       if (alliance === 'blue') {
-        // Blue on right (high X), red on left - facing red = facing LEFT
-        screenRotation = -robotPose.rotation + Math.PI;
+        screenRotation = -robotPose.rotation + Math.PI * 1.5;
       } else {
-        // Red on right, blue on left - facing red = facing RIGHT
-        screenRotation = -robotPose.rotation;
+        screenRotation = -robotPose.rotation + Math.PI / 2;
       }
     } else {
-      // Vertical
       if (alliance === 'blue') {
-        // Blue at bottom, red at top - facing red = facing UP
-        screenRotation = -robotPose.rotation - Math.PI / 2;
+        screenRotation = -robotPose.rotation;
       } else {
-        // Red at bottom, blue at top - facing red = facing DOWN
-        screenRotation = -robotPose.rotation + Math.PI / 2;
+        screenRotation = -robotPose.rotation + Math.PI;
       }
     }
 
@@ -494,6 +488,10 @@ function App() {
               <div className="hud-row">
                 <span className="hud-label">IP</span>
                 <span className="hud-value">{ntStatus.ip}</span>
+              </div>
+              <div className="hud-row">
+                <span className="hud-label">MODE</span>
+                <span className="hud-value">{ntStatus.mode || '--'}</span>
               </div>
               <div className="hud-row">
                 <span className="hud-label">ALLIANCE</span>

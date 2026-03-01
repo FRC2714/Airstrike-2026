@@ -2,7 +2,8 @@ import { NetworkTables, NetworkTablesTypeInfos } from 'ntcore-ts-client';
 
 const CONFIG = {
   TEAM_NUMBER: 2714,
-  SERVER: '127.0.0.1',
+  SIM_SERVER: '127.0.0.1',
+  ROBOT_TIMEOUT_MS: 500,
 };
 
 let ntClient = null;
@@ -10,15 +11,46 @@ let targetXTopic = null;
 let targetYTopic = null;
 let allianceTopic = null;
 let connectionCallback = null;
+let activeServer = '';
 
-export async function initNetworkTables(teamNumber) {
-  const team = teamNumber || CONFIG.TEAM_NUMBER;
-  const server = team > 0 ? `10.${Math.floor(team / 100)}.${team % 100}.2` : CONFIG.SERVER;
+export async function initNetworkTables() {
+  const team = CONFIG.TEAM_NUMBER;
+  const robotIP = `10.${Math.floor(team / 100)}.${team % 100}.2`;
+  const simIP = CONFIG.SIM_SERVER;
 
-  ntClient = NetworkTables.getInstanceByURI(server);
+  // Try connecting to the robot first. If it responds within the timeout,
+  // use the robot. Otherwise fall back to localhost (simulation).
+  // When both are available the robot always wins.
+  const robotClient = NetworkTables.getInstanceByURI(robotIP);
+
+  const robotConnected = await new Promise((resolve) => {
+    let settled = false;
+    robotClient.addRobotConnectionListener((connected) => {
+      if (!settled && connected) {
+        settled = true;
+        resolve(true);
+      }
+    });
+    setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(false);
+      }
+    }, CONFIG.ROBOT_TIMEOUT_MS);
+  });
+
+  if (robotConnected) {
+    console.log(`Connected to robot at ${robotIP}`);
+    ntClient = robotClient;
+    activeServer = robotIP;
+  } else {
+    console.log(`Robot not found at ${robotIP}, falling back to simulation at ${simIP}`);
+    ntClient = NetworkTables.getInstanceByURI(simIP);
+    activeServer = simIP;
+  }
 
   ntClient.addRobotConnectionListener((connected) => {
-    console.log(connected ? 'Connected to NetworkTables' : 'Disconnected from NetworkTables');
+    console.log(connected ? `Connected to NetworkTables at ${activeServer}` : 'Disconnected from NetworkTables');
     if (connectionCallback) {
       connectionCallback(connected);
     }
@@ -31,8 +63,12 @@ export async function initNetworkTables(teamNumber) {
   await targetXTopic.publish({ defaultValue: 0 });
   await targetYTopic.publish({ defaultValue: 0 });
 
-  console.log('NetworkTables initialized');
-  return true;
+  console.log(`NetworkTables initialized (${robotConnected ? 'robot' : 'simulation'} mode)`);
+  return robotConnected;
+}
+
+export function getActiveServer() {
+  return activeServer;
 }
 
 export function onConnectionChange(callback) {
@@ -94,23 +130,18 @@ export function subscribeToRobotPose(callback) {
     return null;
   }
 
-  // WPILib Field2d default object path is SmartDashboard/<name>/Robot.
-  // Keep fallback topics so this still works with alternate publishers.
-  const poseTopics = [
-    ntClient.createTopic('/SmartDashboard/Field/Robot', NetworkTablesTypeInfos.kDoubleArray),
-    ntClient.createTopic('/SmartDashboard/Field/robotPose', NetworkTablesTypeInfos.kDoubleArray),
-    ntClient.createTopic('/Robot Pose', NetworkTablesTypeInfos.kDoubleArray),
-  ];
+  const poseTopic = ntClient.createTopic('Robot Pose Array', NetworkTablesTypeInfos.kDoubleArray);
 
-  const subIds = poseTopics.map((topic) => topic.subscribe((value) => {
+  const subId = poseTopic.subscribe((value) => {
+    console.log('Robot Pose raw:', value);
     const parsed = parsePoseArray(value);
     if (parsed) {
       callback(parsed);
     }
-  }));
+  });
 
-  console.log('Subscribed to robot pose topics: /SmartDashboard/Field/Robot, /SmartDashboard/Field/robotPose, /Robot Pose');
-  return subIds;
+  console.log('Subscribed to Robot Pose Array');
+  return subId;
 }
 
 export function isConnected() {
