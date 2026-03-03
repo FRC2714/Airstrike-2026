@@ -60,8 +60,8 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-100%, -50%);
-  max-width: 100vh;
-  max-height: 100vw;
+  max-width: 98vh;
+  max-height: 98vw;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -80,8 +80,8 @@ body {
 
 /* Horizontal mode */
 .field-image.horizontal {
-  width: 100%;
-  height: 100%;
+  width: 98%;
+  height: 98%;
   max-width: none;
   max-height: none;
   object-fit: contain;
@@ -320,51 +320,56 @@ body {
 /* Layout */
 .app {
   display: flex;
+  flex-direction: column;
   align-items: stretch;
 }
 
 .field {
   flex: 1;
-  min-width: 0;
-  width: auto;
+  min-height: 0;
+  width: 100%;
 }
 
-/* Sidebar */
+/* Bottom zone controls */
 .sidebar {
-  width: 220px;
-  height: 100%;
+  width: 100%;
+  height: 92px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0;
   z-index: 200;
   pointer-events: auto;
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.95), rgba(12, 12, 12, 0.98));
-  border-left: 2px solid var(--border);
-  padding: 8px 0 0;
+  border-top: 2px solid var(--border);
+  padding: 0;
 }
 
 .alliance-label {
+  width: 68px;
+  min-width: 68px;
   font-family: 'Orbitron', sans-serif;
   font-size: 11px;
   letter-spacing: 2px;
   color: var(--text-dim);
   text-align: center;
-  padding: 10px 0 12px;
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Buttons */
 .zone-btn {
   flex: 1;
-  width: 100%;
+  height: 100%;
   padding: 0 8px;
   margin: 0;
-  background: rgba(20, 20, 20, 0.7);
+  background: rgba(20, 20, 20, 0.35);
   border: none;
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
   color: var(--text);
   font-family: 'Orbitron', sans-serif;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: 1px;
   cursor: pointer;
@@ -379,6 +384,7 @@ body {
   line-height: 1;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(3px);
 }
 
 .zone-btn .btn-text {
@@ -386,7 +392,7 @@ body {
 }
 
 .zone-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .zone-btn:active {
@@ -394,69 +400,92 @@ body {
 }
 
 .zone-btn:last-child {
-  border-bottom: none;
+  border-right: none;
 }
 
 /* Alliance accents */
 .sidebar.red {
-  border-left-color: rgba(239, 68, 68, 0.6);
+  border-top-color: rgba(239, 68, 68, 0.6);
 }
 
 .sidebar.blue {
-  border-left-color: rgba(59, 130, 246, 0.6);
+  border-top-color: rgba(59, 130, 246, 0.6);
 }
 
 /* Button accent rails */
 .sidebar .zone-btn {
-  border-left: 4px solid rgba(255, 255, 255, 0.08);
+  border-top: 4px solid rgba(255, 255, 255, 0.08);
 }
 
 .sidebar.red .zone-btn.left-zone {
-  border-left-color: rgba(239, 68, 68, 0.6);
+  border-top-color: rgba(239, 68, 68, 0.6);
 }
 
 .sidebar.red .zone-btn.middle-zone {
-  border-left-color: rgba(249, 115, 22, 0.7);
+  border-top-color: rgba(249, 115, 22, 0.7);
 }
 
 .sidebar.red .zone-btn.right-zone {
-  border-left-color: rgba(59, 130, 246, 0.7);
+  border-top-color: rgba(59, 130, 246, 0.7);
 }
 
 .sidebar.blue .zone-btn.left-zone {
-  border-left-color: rgba(59, 130, 246, 0.7);
+  border-top-color: rgba(59, 130, 246, 0.7);
 }
 
 .sidebar.blue .zone-btn.middle-zone {
-  border-left-color: rgba(249, 115, 22, 0.7);
+  border-top-color: rgba(249, 115, 22, 0.7);
 }
 
 .sidebar.blue .zone-btn.right-zone {
-  border-left-color: rgba(239, 68, 68, 0.6);
+  border-top-color: rgba(239, 68, 68, 0.6);
 }
 
 .zone-btn.clear-btn {
-  border-left-color: rgba(239, 68, 68, 0.9);
+  border-top-color: rgba(239, 68, 68, 0.9);
   font-size: 18px;
 }
 
 .zone-btn.clear-btn:hover {
-  background: rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.3);
   box-shadow: inset 0 0 24px rgba(239, 68, 68, 0.2);
 }
 
 /* Responsive */
 @media (max-width: 900px) {
   .sidebar {
-    width: 180px;
+    height: 84px;
+  }
+
+  .alliance-label {
+    width: 56px;
+    min-width: 56px;
+    font-size: 10px;
   }
 
   .zone-btn {
-    font-size: 16px;
+    font-size: 13px;
+    gap: 4px;
   }
 }
 
 @media (max-width: 600px) {
+  .sidebar {
+    height: 76px;
+  }
+
+  .alliance-label {
+    width: 48px;
+    min-width: 48px;
+    letter-spacing: 1px;
+    font-size: 9px;
+  }
+
+  .zone-btn {
+    font-size: 11px;
+    gap: 2px;
+  }
+
   .hud {
     padding: 8px;
   }

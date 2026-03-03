@@ -12,14 +12,14 @@ const FIELD = {
 // Blue team starts on the right side (X = 651.2)
 const ZONES = {
   red: {
-    LEFT: { x: 555.4, y: 259, label: 'LEFT ZONE' },      // Closest to red wall
+    LEFT: { x: 563, y: 60.8, label: 'LEFT ZONE' },       // Left side from driver perspective
     MIDDLE: { x: 556.8, y: 159, label: 'MIDDLE ZONE' },  // Center
-    RIGHT: { x: 563, y: 60.8, label: 'RIGHT ZONE' },    // Far from red wall
+    RIGHT: { x: 555.4, y: 259, label: 'RIGHT ZONE' },    // Right side from driver perspective
   },
   blue: {
-    LEFT: { x: 93, y: 57, label: 'LEFT ZONE' },      // Far from blue wall (flipped)
+    LEFT: { x: 95, y: 263, label: 'LEFT ZONE' },         // Left side from driver perspective
     MIDDLE: { x: 96.5, y: 159, label: 'MIDDLE ZONE' },  // Center (same)
-    RIGHT: { x: 95, y: 263, label: 'RIGHT ZONE' },    // Closest to blue wall (flipped)
+    RIGHT: { x: 93, y: 57, label: 'RIGHT ZONE' },       // Right side from driver perspective
   },
 };
 
@@ -531,11 +531,11 @@ function App() {
         </div>
 
         <button
-          className="zone-btn right-zone"
-          onClick={() => handleZoneClick(currentZones.RIGHT)}
-          title="Set target to right zone"
+          className="zone-btn left-zone"
+          onClick={() => handleZoneClick(currentZones.LEFT)}
+          title="Set target to left zone"
         >
-          <span className="btn-text">RIGHT</span>
+          <span className="btn-text">LEFT</span>
           <span className="btn-text">ZONE</span>
         </button>
 
@@ -549,11 +549,11 @@ function App() {
         </button>
 
         <button
-          className="zone-btn left-zone"
-          onClick={() => handleZoneClick(currentZones.LEFT)}
-          title="Set target to left zone"
+          className="zone-btn right-zone"
+          onClick={() => handleZoneClick(currentZones.RIGHT)}
+          title="Set target to right zone"
         >
-          <span className="btn-text">LEFT</span>
+          <span className="btn-text">RIGHT</span>
           <span className="btn-text">ZONE</span>
         </button>
 
