@@ -232,16 +232,6 @@ function App() {
     return true;
   }, [screenToField, ntStatus.connected]);
 
-  // Handle field clicks to set targets
-  const handleFieldClick = useCallback((e) => {
-    if (!fieldRef.current) return;
-
-    const rect = fieldRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    setTargetFromScreen(screenX, screenY);
-  }, [setTargetFromScreen]);
-
   const handleFieldMouseDown = useCallback((e) => {
     if (!fieldRef.current || e.button !== 0) return;
     if (e.target.closest('.hud')) return;
@@ -291,8 +281,10 @@ function App() {
     setHoveredDot(nearestDot);
   }, [gridDots, setTargetFromScreen]);
 
-  const handleTouchEnd = useCallback((e) => {
+  const handleTouchEnd = useCallback(() => {
     isDraggingRef.current = false;
+    setTargets([]);
+    clearTarget();
     setMousePos(null);
     setHoveredDot(null);
   }, []);
@@ -350,7 +342,11 @@ function App() {
 
   useEffect(() => {
     const handleMouseUp = () => {
-      isDraggingRef.current = false;
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setTargets([]);
+        clearTarget();
+      }
     };
 
     window.addEventListener('mouseup', handleMouseUp);
@@ -438,13 +434,16 @@ function App() {
       <div
         ref={fieldRef}
         className="field"
-        onClick={handleFieldClick}
         onMouseDown={handleFieldMouseDown}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => {
           setMousePos(null);
           setHoveredDot(null);
-          isDraggingRef.current = false;
+          if (isDraggingRef.current) {
+            isDraggingRef.current = false;
+            setTargets([]);
+            clearTarget();
+          }
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
