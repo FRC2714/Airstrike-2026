@@ -26,6 +26,7 @@ const ZONES = {
 function App() {
   const [ntStatus, setNtStatus] = useState({ connected: false, ip: '', mode: '' });
   const [hudOpen, setHudOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alliance, setAlliance] = useState('red');
   const [targets, setTargets] = useState([]);
   const [mousePos, setMousePos] = useState(null);
@@ -571,48 +572,56 @@ function App() {
 
       </div>
 
-      {/* RIGHT SIDEBAR - Zone buttons */}
-      <div className={`sidebar ${alliance}`}>
-        <div className="alliance-label">
-          {alliance.toUpperCase()}
+      {/* Bottom zone controls - collapsible */}
+      <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        {sidebarOpen ? '▼' : '▲'}
+      </button>
+
+      {sidebarOpen && (
+        <div className={`sidebar ${alliance}`}>
+          <div className="sidebar-buttons">
+            <div className="alliance-label">
+              {alliance.toUpperCase()}
+            </div>
+
+            <button
+              className="zone-btn left-zone"
+              onClick={() => handleZoneClick(currentZones.LEFT)}
+              title="Set target to left zone"
+            >
+              <span className="btn-text">LEFT</span>
+              <span className="btn-text">ZONE</span>
+            </button>
+
+            <button
+              className="zone-btn middle-zone"
+              onClick={() => handleZoneClick(currentZones.MIDDLE)}
+              title="Set target to middle zone"
+            >
+              <span className="btn-text">MIDDLE</span>
+              <span className="btn-text">ZONE</span>
+            </button>
+
+            <button
+              className="zone-btn right-zone"
+              onClick={() => handleZoneClick(currentZones.RIGHT)}
+              title="Set target to right zone"
+            >
+              <span className="btn-text">RIGHT</span>
+              <span className="btn-text">ZONE</span>
+            </button>
+
+            <button
+              className="zone-btn clear-btn"
+              onClick={handleClearTarget}
+              title="Clear target"
+            >
+              <span className="btn-text">CLEAR</span>
+              <span className="btn-text">TARGET</span>
+            </button>
+          </div>
         </div>
-
-        <button
-          className="zone-btn left-zone"
-          onClick={() => handleZoneClick(currentZones.LEFT)}
-          title="Set target to left zone"
-        >
-          <span className="btn-text">LEFT</span>
-          <span className="btn-text">ZONE</span>
-        </button>
-
-        <button
-          className="zone-btn middle-zone"
-          onClick={() => handleZoneClick(currentZones.MIDDLE)}
-          title="Set target to middle zone"
-        >
-          <span className="btn-text">MIDDLE</span>
-          <span className="btn-text">ZONE</span>
-        </button>
-
-        <button
-          className="zone-btn right-zone"
-          onClick={() => handleZoneClick(currentZones.RIGHT)}
-          title="Set target to right zone"
-        >
-          <span className="btn-text">RIGHT</span>
-          <span className="btn-text">ZONE</span>
-        </button>
-
-        <button
-          className="zone-btn clear-btn"
-          onClick={handleClearTarget}
-          title="Clear target"
-        >
-          <span className="btn-text">CLEAR</span>
-          <span className="btn-text">TARGET</span>
-        </button>
-      </div>
+      )}
     </div>
   );
 }

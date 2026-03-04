@@ -334,15 +334,39 @@ body {
 /* Bottom zone controls */
 .sidebar {
   width: 100%;
-  height: 92px;
-  display: flex;
-  flex-direction: row;
-  gap: 0;
   z-index: 200;
   pointer-events: auto;
   background: linear-gradient(180deg, rgba(20, 20, 20, 0.95), rgba(12, 12, 12, 0.98));
   border-top: 2px solid var(--border);
-  padding: 0;
+}
+
+.sidebar-toggle {
+  position: fixed;
+  bottom: 12px;
+  right: 12px;
+  width: 56px;
+  height: 56px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 250;
+  border-radius: 4px;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+.sidebar-buttons {
+  display: flex;
+  flex-direction: row;
+  height: 84px;
 }
 
 .alliance-label {
@@ -454,8 +478,8 @@ body {
 
 /* Responsive */
 @media (max-width: 900px) {
-  .sidebar {
-    height: 84px;
+  .sidebar-buttons {
+    height: 76px;
   }
 
   .alliance-label {
@@ -471,8 +495,8 @@ body {
 }
 
 @media (max-width: 600px) {
-  .sidebar {
-    height: 76px;
+  .sidebar-buttons {
+    height: 68px;
   }
 
   .alliance-label {
