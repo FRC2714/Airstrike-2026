@@ -252,6 +252,51 @@ function App() {
     isDraggingRef.current = setTargetFromScreen(screenX, screenY);
   }, [setTargetFromScreen]);
 
+  const handleTouchStart = useCallback((e) => {
+    if (!fieldRef.current) return;
+    if (e.target.closest('.hud')) return;
+
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = fieldRef.current.getBoundingClientRect();
+    const screenX = touch.clientX - rect.left;
+    const screenY = touch.clientY - rect.top;
+    isDraggingRef.current = setTargetFromScreen(screenX, screenY);
+    setMousePos({ x: screenX, y: screenY });
+  }, [setTargetFromScreen]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!fieldRef.current) return;
+
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = fieldRef.current.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    setMousePos({ x, y });
+    if (isDraggingRef.current) {
+      setTargetFromScreen(x, y);
+    }
+
+    let nearestDot = null;
+    let minDist = GRID_SPACING;
+    gridDots.forEach(dot => {
+      const dist = Math.sqrt((dot.x - x) ** 2 + (dot.y - y) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        nearestDot = { x: dot.x, y: dot.y };
+      }
+    });
+    setHoveredDot(nearestDot);
+  }, [gridDots, setTargetFromScreen]);
+
+  const handleTouchEnd = useCallback((e) => {
+    isDraggingRef.current = false;
+    setMousePos(null);
+    setHoveredDot(null);
+  }, []);
+
   // Handle preset zone buttons - gets current alliance's zones
   const handleZoneClick = useCallback((zone) => {
     const fieldCoords = zone;
@@ -401,6 +446,9 @@ function App() {
           setHoveredDot(null);
           isDraggingRef.current = false;
         }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <img
           src="/2026RebuiltField.png"

@@ -53,6 +53,7 @@ body {
   cursor: crosshair;
   background: var(--bg);
   overflow: hidden;
+  touch-action: none;
 }
 
 .field-image {
