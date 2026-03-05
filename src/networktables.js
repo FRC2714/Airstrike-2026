@@ -88,9 +88,11 @@ export function publishTarget(target) {
     return;
   }
 
+  const INCHES_TO_METERS = 1 / 39.3701;
+
   try {
-    targetXTopic.setValue(target.x);
-    targetYTopic.setValue(target.y);
+    targetXTopic.setValue(target.x * INCHES_TO_METERS);
+    targetYTopic.setValue(target.y * INCHES_TO_METERS);
   } catch (e) {
     console.warn('publishTarget failed (topic not yet published):', e.message);
   }
