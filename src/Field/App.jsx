@@ -87,27 +87,62 @@ function App() {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Get the actual visible image content bounds (accounts for object-fit: contain
+  // in horizontal mode where the CSS box is larger than the visible image)
+  const getImageBounds = useCallback(() => {
+    const img = fieldRef.current?.querySelector('img');
+    if (!img) return null;
+    const containerRect = fieldRef.current.getBoundingClientRect();
+    const imgRect = img.getBoundingClientRect();
+
+    if (fieldRotation === 'horizontal') {
+      // object-fit: contain — compute actual visible content area
+      const naturalAspect = img.naturalWidth / img.naturalHeight;
+      const boxAspect = imgRect.width / imgRect.height;
+
+      let contentW, contentH;
+      if (naturalAspect > boxAspect) {
+        contentW = imgRect.width;
+        contentH = imgRect.width / naturalAspect;
+      } else {
+        contentH = imgRect.height;
+        contentW = imgRect.height * naturalAspect;
+      }
+
+      const offsetX = (imgRect.width - contentW) / 2;
+      const offsetY = (imgRect.height - contentH) / 2;
+
+      return {
+        left: imgRect.left - containerRect.left + offsetX,
+        top: imgRect.top - containerRect.top + offsetY,
+        width: contentW,
+        height: contentH,
+      };
+    }
+
+    // Vertical mode: bounding rect matches visible content
+    return {
+      left: imgRect.left - containerRect.left,
+      top: imgRect.top - containerRect.top,
+      width: imgRect.width,
+      height: imgRect.height,
+    };
+  }, [fieldRotation]);
+
   useEffect(() => {
     if (dimensions.width === 0 || dimensions.height === 0) return;
     if (!imageLoaded) return;
 
     // Small delay to ensure CSS transforms have applied
     const timeout = setTimeout(() => {
-      const img = fieldRef.current?.querySelector('img');
-      if (!img) return;
-
-      const imgRect = img.getBoundingClientRect();
-      const containerRect = fieldRef.current.getBoundingClientRect();
-
-      const imgLeft = imgRect.left - containerRect.left;
-      const imgTop = imgRect.top - containerRect.top;
-      const imgRight = imgLeft + imgRect.width;
-      const imgBottom = imgTop + imgRect.height;
+      const bounds = getImageBounds();
+      if (!bounds) return;
 
       const dots = [];
       for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
         for (let y = GRID_SPACING; y < dimensions.height; y += GRID_SPACING) {
-          if (x > imgLeft && x < imgRight && y > imgTop && y < imgBottom) {
+          if (x > bounds.left && x < bounds.left + bounds.width &&
+              y > bounds.top && y < bounds.top + bounds.height) {
             dots.push({ x, y });
           }
         }
@@ -116,22 +151,16 @@ function App() {
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [dimensions, alliance, fieldRotation, imageLoaded]);
+  }, [dimensions, alliance, fieldRotation, imageLoaded, getImageBounds]);
 
 
   // Convert screen coordinates to field coordinates based on alliance and rotation
   const screenToField = useCallback((screenX, screenY) => {
-    const img = fieldRef.current?.querySelector('img');
-    if (!img) return { x: 0, y: 0 };
+    const bounds = getImageBounds();
+    if (!bounds) return { x: 0, y: 0 };
 
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fieldRef.current.getBoundingClientRect();
-
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
-
-    const relX = (screenX - imgLeft) / imgRect.width;
-    const relY = (screenY - imgTop) / imgRect.height;
+    const relX = (screenX - bounds.left) / bounds.width;
+    const relY = (screenY - bounds.top) / bounds.height;
 
     let fieldX, fieldY;
 
@@ -141,7 +170,7 @@ function App() {
         fieldY = (1 - relY) * FIELD.Y;
       } else {
         fieldX = relX * FIELD.X;
-        fieldY = (1 - relY) * FIELD.Y;
+        fieldY = relY * FIELD.Y;
       }
     } else {
       if (alliance === 'blue') {
@@ -149,7 +178,7 @@ function App() {
         fieldY = relX * FIELD.Y;
       } else {
         fieldX = relY * FIELD.X;
-        fieldY = relX * FIELD.Y;
+        fieldY = (1 - relX) * FIELD.Y;
       }
     }
 
@@ -157,18 +186,12 @@ function App() {
       x: parseFloat(fieldX.toFixed(2)),
       y: parseFloat(fieldY.toFixed(2))
     };
-  }, [alliance, fieldRotation]);
+  }, [alliance, fieldRotation, getImageBounds]);
 
   // Convert field coordinates back to screen position for rendering targets
   const fieldToScreen = useCallback((fieldX, fieldY) => {
-    const img = fieldRef.current?.querySelector('img');
-    if (!img) return { x: 0, y: 0 };
-
-    const imgRect = img.getBoundingClientRect();
-    const containerRect = fieldRef.current.getBoundingClientRect();
-
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
+    const bounds = getImageBounds();
+    if (!bounds) return { x: 0, y: 0 };
 
     let relX, relY;
 
@@ -178,7 +201,7 @@ function App() {
         relY = 1 - fieldY / FIELD.Y;
       } else {
         relX = fieldX / FIELD.X;
-        relY = 1 - fieldY / FIELD.Y;
+        relY = fieldY / FIELD.Y;
       }
     } else {
       // Vertical
@@ -186,16 +209,16 @@ function App() {
         relX = fieldY / FIELD.Y;
         relY = 1 - fieldX / FIELD.X;
       } else {
-        relX = fieldY / FIELD.Y;
+        relX = 1 - fieldY / FIELD.Y;
         relY = fieldX / FIELD.X;
       }
     }
 
     return {
-      x: relX * imgRect.width + imgLeft,
-      y: relY * imgRect.height + imgTop,
+      x: relX * bounds.width + bounds.left,
+      y: relY * bounds.height + bounds.top,
     };
-  }, [alliance, fieldRotation]);
+  }, [alliance, fieldRotation, getImageBounds]);
 
   // Auto-aim: pick the zone on the same side of the hub as the robot
   const autoAimTarget = useMemo(() => {
@@ -218,19 +241,11 @@ function App() {
   }, [autoAimTarget, targets.length, ntStatus.connected]);
 
   const setTargetFromScreen = useCallback((screenX, screenY) => {
-    if (!fieldRef.current) return false;
+    const bounds = getImageBounds();
+    if (!bounds) return false;
 
-    const containerRect = fieldRef.current.getBoundingClientRect();
-    const img = fieldRef.current.querySelector('img');
-    if (!img) return false;
-
-    const imgRect = img.getBoundingClientRect();
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
-    const imgRight = imgLeft + imgRect.width;
-    const imgBottom = imgTop + imgRect.height;
-
-    if (screenX < imgLeft || screenX > imgRight || screenY < imgTop || screenY > imgBottom) {
+    if (screenX < bounds.left || screenX > bounds.left + bounds.width ||
+        screenY < bounds.top || screenY > bounds.top + bounds.height) {
       return false;
     }
 
@@ -252,7 +267,7 @@ function App() {
 
     setTargets([newTarget]);
     return true;
-  }, [screenToField, ntStatus.connected]);
+  }, [screenToField, ntStatus.connected, getImageBounds]);
 
   const handleFieldMouseDown = useCallback((e) => {
     if (!fieldRef.current || e.button !== 0) return;
@@ -478,6 +493,22 @@ function App() {
           className={`field-image ${alliance} ${fieldRotation}`}
           onLoad={() => setImageLoaded(true)}
         />
+
+        {(() => {
+          const bounds = getImageBounds();
+          if (!bounds) return null;
+          return (
+            <div
+              className="field-border"
+              style={{
+                left: bounds.left,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+              }}
+            />
+          );
+        })()}
 
         <div className="grid-overlay">
           {gridDots.map((dot, i) => (
