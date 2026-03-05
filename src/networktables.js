@@ -49,19 +49,26 @@ export async function initNetworkTables() {
     activeServer = simIP;
   }
 
-  ntClient.addRobotConnectionListener((connected) => {
-    console.log(connected ? `Connected to NetworkTables at ${activeServer}` : 'Disconnected from NetworkTables');
-    if (connectionCallback) {
-      connectionCallback(connected);
-    }
-  });
-
   targetXTopic = ntClient.createTopic('/SmartDashboard/airstrike/x', NetworkTablesTypeInfos.kDouble);
   targetYTopic = ntClient.createTopic('/SmartDashboard/airstrike/y', NetworkTablesTypeInfos.kDouble);
   allianceTopic = ntClient.createTopic('/FMSInfo/IsRedAlliance', NetworkTablesTypeInfos.kBoolean);
 
   await targetXTopic.publish({ defaultValue: 0 });
   await targetYTopic.publish({ defaultValue: 0 });
+
+  // Register connection listener AFTER topics are published so
+  // callbacks that fire on connect can safely call setValue.
+  ntClient.addRobotConnectionListener((connected) => {
+    console.log(connected ? `Connected to NetworkTables at ${activeServer}` : 'Disconnected from NetworkTables');
+    if (connected) {
+      // Re-publish topics on reconnect so setValue works
+      targetXTopic.publish({ defaultValue: 0 });
+      targetYTopic.publish({ defaultValue: 0 });
+    }
+    if (connectionCallback) {
+      connectionCallback(connected);
+    }
+  });
 
   console.log(`NetworkTables initialized (${robotConnected ? 'robot' : 'simulation'} mode)`);
   return robotConnected;
@@ -81,9 +88,12 @@ export function publishTarget(target) {
     return;
   }
 
-  targetXTopic.setValue(target.x);
-  targetYTopic.setValue(target.y);
-  console.log(`Published: X=${target.x}, Y=${target.y}`);
+  try {
+    targetXTopic.setValue(target.x);
+    targetYTopic.setValue(target.y);
+  } catch (e) {
+    console.warn('publishTarget failed (topic not yet published):', e.message);
+  }
 }
 
 export function clearTarget() {

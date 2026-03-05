@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { initNetworkTables, publishTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
 import './App.css';
 
 const FIELD = {
@@ -26,6 +26,7 @@ const ZONES = {
 function App() {
   const [ntStatus, setNtStatus] = useState({ connected: false, ip: '', mode: '' });
   const [hudOpen, setHudOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [alliance, setAlliance] = useState('red');
   const [targets, setTargets] = useState([]);
   const [mousePos, setMousePos] = useState(null);
@@ -38,6 +39,7 @@ function App() {
 
   const fieldRef = useRef(null);
   const isDraggingRef = useRef(false);
+  const isManualOverrideRef = useRef(false);
 
   const GRID_SPACING = 28;
   const [gridDots, setGridDots] = useState([]);
@@ -195,6 +197,26 @@ function App() {
     };
   }, [alliance, fieldRotation]);
 
+  // Auto-aim: pick the zone on the same side of the hub as the robot
+  const autoAimTarget = useMemo(() => {
+    const CENTER_Y = FIELD.Y / 2;
+    const zones = ZONES[alliance];
+    if (robotPose.y < CENTER_Y) {
+      // Low-Y side: Red LEFT (y=60.8) or Blue RIGHT (y=57)
+      return alliance === 'red' ? zones.LEFT : zones.RIGHT;
+    } else {
+      // High-Y side: Red RIGHT (y=259) or Blue LEFT (y=263)
+      return alliance === 'red' ? zones.RIGHT : zones.LEFT;
+    }
+  }, [robotPose.y, alliance]);
+
+  // Publish auto-aim target when no manual target is active
+  useEffect(() => {
+    if (targets.length === 0 && !isDraggingRef.current && !isManualOverrideRef.current && ntStatus.connected) {
+      publishTarget({ x: autoAimTarget.x, y: autoAimTarget.y });
+    }
+  }, [autoAimTarget, targets.length, ntStatus.connected]);
+
   const setTargetFromScreen = useCallback((screenX, screenY) => {
     if (!fieldRef.current) return false;
 
@@ -232,16 +254,6 @@ function App() {
     return true;
   }, [screenToField, ntStatus.connected]);
 
-  // Handle field clicks to set targets
-  const handleFieldClick = useCallback((e) => {
-    if (!fieldRef.current) return;
-
-    const rect = fieldRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    setTargetFromScreen(screenX, screenY);
-  }, [setTargetFromScreen]);
-
   const handleFieldMouseDown = useCallback((e) => {
     if (!fieldRef.current || e.button !== 0) return;
     if (e.target.closest('.hud')) return;
@@ -252,8 +264,56 @@ function App() {
     isDraggingRef.current = setTargetFromScreen(screenX, screenY);
   }, [setTargetFromScreen]);
 
+  const handleTouchStart = useCallback((e) => {
+    if (!fieldRef.current) return;
+    if (e.target.closest('.hud')) return;
+
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = fieldRef.current.getBoundingClientRect();
+    const screenX = touch.clientX - rect.left;
+    const screenY = touch.clientY - rect.top;
+    isDraggingRef.current = setTargetFromScreen(screenX, screenY);
+    setMousePos({ x: screenX, y: screenY });
+  }, [setTargetFromScreen]);
+
+  const handleTouchMove = useCallback((e) => {
+    if (!fieldRef.current) return;
+
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = fieldRef.current.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+
+    setMousePos({ x, y });
+    if (isDraggingRef.current) {
+      setTargetFromScreen(x, y);
+    }
+
+    let nearestDot = null;
+    let minDist = GRID_SPACING;
+    gridDots.forEach(dot => {
+      const dist = Math.sqrt((dot.x - x) ** 2 + (dot.y - y) ** 2);
+      if (dist < minDist) {
+        minDist = dist;
+        nearestDot = { x: dot.x, y: dot.y };
+      }
+    });
+    setHoveredDot(nearestDot);
+  }, [gridDots, setTargetFromScreen]);
+
+  const handleTouchEnd = useCallback(() => {
+    isDraggingRef.current = false;
+    isManualOverrideRef.current = false;
+    setTargets([]);
+    setMousePos(null);
+    setHoveredDot(null);
+  }, []);
+
   // Handle preset zone buttons - gets current alliance's zones
   const handleZoneClick = useCallback((zone) => {
+    isManualOverrideRef.current = true;
     const fieldCoords = zone;
 
     const newTarget = {
@@ -270,10 +330,10 @@ function App() {
     setTargets([newTarget]);
   }, [ntStatus.connected]);
 
-  // Handle clear target button
+  // Handle clear target button — reverts to auto-aim
   const handleClearTarget = useCallback(() => {
+    isManualOverrideRef.current = false;
     setTargets([]);
-    clearTarget();
   }, []);
 
   // Handle mouse movement to find nearest grid dot and calculate dynamic styles
@@ -305,7 +365,11 @@ function App() {
 
   useEffect(() => {
     const handleMouseUp = () => {
-      isDraggingRef.current = false;
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        isManualOverrideRef.current = false;
+        setTargets([]);
+      }
     };
 
     window.addEventListener('mouseup', handleMouseUp);
@@ -393,14 +457,20 @@ function App() {
       <div
         ref={fieldRef}
         className="field"
-        onClick={handleFieldClick}
         onMouseDown={handleFieldMouseDown}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => {
           setMousePos(null);
           setHoveredDot(null);
-          isDraggingRef.current = false;
+          if (isDraggingRef.current) {
+            isDraggingRef.current = false;
+            isManualOverrideRef.current = false;
+            setTargets([]);
+          }
         }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <img
           src="/2026RebuiltField.png"
@@ -444,6 +514,24 @@ function App() {
             </div>
           );
         })}
+
+        {targets.length === 0 && autoAimTarget && (() => {
+          const screenPos = fieldToScreen(autoAimTarget.x, autoAimTarget.y);
+          return (
+            <div
+              className="auto-aim-target"
+              style={{
+                left: screenPos.x,
+                top: screenPos.y,
+                zIndex: 90,
+              }}
+            >
+              <div className="auto-aim-ring" />
+              <div className="auto-aim-core" />
+              <div className="auto-aim-label">AUTO</div>
+            </div>
+          );
+        })()}
 
         {(() => {
           const robotScreen = getRobotScreenPosition();
@@ -502,7 +590,7 @@ function App() {
                 <span className="hud-value">
                   {targets.length > 0
                     ? `${targets[0].fieldX.toFixed(1)}", ${targets[0].fieldY.toFixed(1)}"`
-                    : '--'
+                    : <span className="hud-auto-aim">AUTO {autoAimTarget.x.toFixed(0)}, {autoAimTarget.y.toFixed(0)}</span>
                   }
                 </span>
               </div>
@@ -524,48 +612,56 @@ function App() {
 
       </div>
 
-      {/* RIGHT SIDEBAR - Zone buttons */}
-      <div className={`sidebar ${alliance}`}>
-        <div className="alliance-label">
-          {alliance.toUpperCase()}
+      {/* Bottom zone controls - collapsible */}
+      <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        {sidebarOpen ? '▼' : '▲'}
+      </button>
+
+      {sidebarOpen && (
+        <div className={`sidebar ${alliance}`}>
+          <div className="sidebar-buttons">
+            <div className="alliance-label">
+              {alliance.toUpperCase()}
+            </div>
+
+            <button
+              className="zone-btn left-zone"
+              onClick={() => handleZoneClick(currentZones.LEFT)}
+              title="Set target to left zone"
+            >
+              <span className="btn-text">LEFT</span>
+              <span className="btn-text">ZONE</span>
+            </button>
+
+            <button
+              className="zone-btn middle-zone"
+              onClick={() => handleZoneClick(currentZones.MIDDLE)}
+              title="Set target to middle zone"
+            >
+              <span className="btn-text">MIDDLE</span>
+              <span className="btn-text">ZONE</span>
+            </button>
+
+            <button
+              className="zone-btn right-zone"
+              onClick={() => handleZoneClick(currentZones.RIGHT)}
+              title="Set target to right zone"
+            >
+              <span className="btn-text">RIGHT</span>
+              <span className="btn-text">ZONE</span>
+            </button>
+
+            <button
+              className="zone-btn clear-btn"
+              onClick={handleClearTarget}
+              title="Clear target"
+            >
+              <span className="btn-text">CLEAR</span>
+              <span className="btn-text">TARGET</span>
+            </button>
+          </div>
         </div>
-
-        <button
-          className="zone-btn left-zone"
-          onClick={() => handleZoneClick(currentZones.LEFT)}
-          title="Set target to left zone"
-        >
-          <span className="btn-text">LEFT</span>
-          <span className="btn-text">ZONE</span>
-        </button>
-
-        <button
-          className="zone-btn middle-zone"
-          onClick={() => handleZoneClick(currentZones.MIDDLE)}
-          title="Set target to middle zone"
-        >
-          <span className="btn-text">MIDDLE</span>
-          <span className="btn-text">ZONE</span>
-        </button>
-
-        <button
-          className="zone-btn right-zone"
-          onClick={() => handleZoneClick(currentZones.RIGHT)}
-          title="Set target to right zone"
-        >
-          <span className="btn-text">RIGHT</span>
-          <span className="btn-text">ZONE</span>
-        </button>
-
-        <button
-          className="zone-btn clear-btn"
-          onClick={handleClearTarget}
-          title="Clear target"
-        >
-          <span className="btn-text">CLEAR</span>
-          <span className="btn-text">TARGET</span>
-        </button>
-      </div>
+      )}
     </div>
   );
 }
