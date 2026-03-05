@@ -87,22 +87,61 @@ function App() {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Compute actual visible image bounds, accounting for object-fit: contain letterboxing
+  const getImageBounds = useCallback(() => {
+    const img = fieldRef.current?.querySelector('img');
+    const container = fieldRef.current;
+    if (!img || !container) return null;
+
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    if (fieldRotation === 'horizontal') {
+      const naturalW = img.naturalWidth;
+      const naturalH = img.naturalHeight;
+      if (!naturalW || !naturalH) return null;
+
+      const aspectRatio = naturalW / naturalH;
+      const boxW = imgRect.width;
+      const boxH = imgRect.height;
+      const boxAspect = boxW / boxH;
+
+      let contentW, contentH;
+      if (boxAspect > aspectRatio) {
+        contentH = boxH;
+        contentW = boxH * aspectRatio;
+      } else {
+        contentW = boxW;
+        contentH = boxW / aspectRatio;
+      }
+
+      const contentLeft = (imgRect.left - containerRect.left) + (boxW - contentW) / 2;
+      const contentTop = (imgRect.top - containerRect.top) + (boxH - contentH) / 2;
+
+      return { left: contentLeft, top: contentTop, width: contentW, height: contentH };
+    } else {
+      return {
+        left: imgRect.left - containerRect.left,
+        top: imgRect.top - containerRect.top,
+        width: imgRect.width,
+        height: imgRect.height,
+      };
+    }
+  }, [fieldRotation]);
+
   useEffect(() => {
     if (dimensions.width === 0 || dimensions.height === 0) return;
     if (!imageLoaded) return;
 
     // Small delay to ensure CSS transforms have applied
     const timeout = setTimeout(() => {
-      const img = fieldRef.current?.querySelector('img');
-      if (!img) return;
+      const bounds = getImageBounds();
+      if (!bounds) return;
 
-      const imgRect = img.getBoundingClientRect();
-      const containerRect = fieldRef.current.getBoundingClientRect();
-
-      const imgLeft = imgRect.left - containerRect.left;
-      const imgTop = imgRect.top - containerRect.top;
-      const imgRight = imgLeft + imgRect.width;
-      const imgBottom = imgTop + imgRect.height;
+      const imgLeft = bounds.left;
+      const imgTop = bounds.top;
+      const imgRight = imgLeft + bounds.width;
+      const imgBottom = imgTop + bounds.height;
 
       const dots = [];
       for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
@@ -116,7 +155,7 @@ function App() {
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [dimensions, alliance, fieldRotation, imageLoaded]);
+  }, [dimensions, alliance, fieldRotation, imageLoaded, getImageBounds]);
 
 
   // Convert screen coordinates to field coordinates based on alliance and rotation
@@ -220,15 +259,13 @@ function App() {
   const setTargetFromScreen = useCallback((screenX, screenY) => {
     if (!fieldRef.current) return false;
 
-    const containerRect = fieldRef.current.getBoundingClientRect();
-    const img = fieldRef.current.querySelector('img');
-    if (!img) return false;
+    const bounds = getImageBounds();
+    if (!bounds) return false;
 
-    const imgRect = img.getBoundingClientRect();
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
-    const imgRight = imgLeft + imgRect.width;
-    const imgBottom = imgTop + imgRect.height;
+    const imgLeft = bounds.left;
+    const imgTop = bounds.top;
+    const imgRight = imgLeft + bounds.width;
+    const imgBottom = imgTop + bounds.height;
 
     if (screenX < imgLeft || screenX > imgRight || screenY < imgTop || screenY > imgBottom) {
       return false;
@@ -252,7 +289,7 @@ function App() {
 
     setTargets([newTarget]);
     return true;
-  }, [screenToField, ntStatus.connected]);
+  }, [screenToField, ntStatus.connected, getImageBounds]);
 
   const handleFieldMouseDown = useCallback((e) => {
     if (!fieldRef.current || e.button !== 0) return;
@@ -478,6 +515,22 @@ function App() {
           className={`field-image ${alliance} ${fieldRotation}`}
           onLoad={() => setImageLoaded(true)}
         />
+
+        {(() => {
+          const bounds = getImageBounds();
+          if (!bounds) return null;
+          return (
+            <div
+              className="field-border"
+              style={{
+                left: bounds.left,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+              }}
+            />
+          );
+        })()}
 
         <div className="grid-overlay">
           {gridDots.map((dot, i) => (
