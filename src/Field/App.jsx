@@ -40,6 +40,7 @@ function App() {
   const fieldRef = useRef(null);
   const isDraggingRef = useRef(false);
   const isManualOverrideRef = useRef(false);
+  const isTouchActiveRef = useRef(false);
 
   const GRID_SPACING = 28;
   const [gridDots, setGridDots] = useState([]);
@@ -273,6 +274,7 @@ function App() {
   }, [screenToField, ntStatus.connected, getImageBounds]);
 
   const handleFieldMouseDown = useCallback((e) => {
+    if (isTouchActiveRef.current) return;
     if (!fieldRef.current || e.button !== 0) return;
     if (e.target.closest('.hud')) return;
 
@@ -286,6 +288,7 @@ function App() {
     if (!fieldRef.current) return;
     if (e.target.closest('.hud')) return;
 
+    isTouchActiveRef.current = true;
     e.preventDefault();
     const touch = e.touches[0];
     const rect = fieldRef.current.getBoundingClientRect();
@@ -322,6 +325,7 @@ function App() {
   }, [gridDots, setTargetFromScreen]);
 
   const handleTouchEnd = useCallback(() => {
+    isTouchActiveRef.current = false;
     isDraggingRef.current = false;
     isManualOverrideRef.current = false;
     setTargets([]);
@@ -356,6 +360,7 @@ function App() {
 
   // Handle mouse movement to find nearest grid dot and calculate dynamic styles
   const handleMouseMove = useCallback((e) => {
+    if (isTouchActiveRef.current) return;
     if (!fieldRef.current) return;
 
     const rect = fieldRef.current.getBoundingClientRect();
@@ -382,6 +387,7 @@ function App() {
   }, [gridDots, setTargetFromScreen]);
 
   const handleMouseUp = useCallback(() => {
+    if (isTouchActiveRef.current) return;
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
       isManualOverrideRef.current = false;
@@ -474,6 +480,7 @@ function App() {
         onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => {
+          if (isTouchActiveRef.current) return;
           setMousePos(null);
           setHoveredDot(null);
           if (isDraggingRef.current) {
