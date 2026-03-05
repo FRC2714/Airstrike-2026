@@ -381,17 +381,12 @@ function App() {
     setHoveredDot(nearestDot);
   }, [gridDots, setTargetFromScreen]);
 
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        isManualOverrideRef.current = false;
-        setTargets([]);
-      }
-    };
-
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => window.removeEventListener('mouseup', handleMouseUp);
+  const handleMouseUp = useCallback(() => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      isManualOverrideRef.current = false;
+      setTargets([]);
+    }
   }, []);
 
   // Calculate dynamic styles for grid dots based on mouse and target proximity
@@ -476,6 +471,7 @@ function App() {
         ref={fieldRef}
         className="field"
         onMouseDown={handleFieldMouseDown}
+        onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => {
           setMousePos(null);
