@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { initNetworkTables, publishTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
 import './App.css';
 
@@ -236,25 +236,6 @@ function App() {
     };
   }, [alliance, fieldRotation]);
 
-  // Auto-aim: pick the zone on the same side of the hub as the robot
-  const autoAimTarget = useMemo(() => {
-    const CENTER_Y = FIELD.Y / 2;
-    const zones = ZONES[alliance];
-    if (robotPose.y < CENTER_Y) {
-      // Low-Y side: Red LEFT (y=60.8) or Blue RIGHT (y=57)
-      return alliance === 'red' ? zones.LEFT : zones.RIGHT;
-    } else {
-      // High-Y side: Red RIGHT (y=259) or Blue LEFT (y=263)
-      return alliance === 'red' ? zones.RIGHT : zones.LEFT;
-    }
-  }, [robotPose.y, alliance]);
-
-  // Publish auto-aim target when no manual target is active
-  useEffect(() => {
-    if (targets.length === 0 && !isDraggingRef.current && !isManualOverrideRef.current && ntStatus.connected) {
-      publishTarget({ x: autoAimTarget.x, y: autoAimTarget.y });
-    }
-  }, [autoAimTarget, targets.length, ntStatus.connected]);
 
   const setTargetFromScreen = useCallback((screenX, screenY) => {
     if (!fieldRef.current) return false;
@@ -568,23 +549,6 @@ function App() {
           );
         })}
 
-        {targets.length === 0 && autoAimTarget && (() => {
-          const screenPos = fieldToScreen(autoAimTarget.x, autoAimTarget.y);
-          return (
-            <div
-              className="auto-aim-target"
-              style={{
-                left: screenPos.x,
-                top: screenPos.y,
-                zIndex: 90,
-              }}
-            >
-              <div className="auto-aim-ring" />
-              <div className="auto-aim-core" />
-              <div className="auto-aim-label">AUTO</div>
-            </div>
-          );
-        })()}
 
         {(() => {
           const robotScreen = getRobotScreenPosition();
@@ -643,7 +607,7 @@ function App() {
                 <span className="hud-value">
                   {targets.length > 0
                     ? `${targets[0].fieldX.toFixed(1)}", ${targets[0].fieldY.toFixed(1)}"`
-                    : <span className="hud-auto-aim">AUTO {autoAimTarget.x.toFixed(0)}, {autoAimTarget.y.toFixed(0)}</span>
+                    : '--'
                   }
                 </span>
               </div>
