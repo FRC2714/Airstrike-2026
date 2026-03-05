@@ -613,7 +613,10 @@ function App() {
       </div>
 
       {/* Bottom zone controls - collapsible */}
-      <button className="sidebar-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+      <button
+        className={`sidebar-toggle ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+      >
         {sidebarOpen ? '▼' : '▲'}
       </button>
 

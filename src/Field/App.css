@@ -424,6 +424,10 @@ body {
   border-radius: 4px;
 }
 
+.sidebar-toggle.open {
+  bottom: 96px;
+}
+
 .sidebar-toggle:hover {
   background: rgba(255, 255, 255, 0.1);
   color: var(--text);
