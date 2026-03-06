@@ -49,10 +49,6 @@ function App() {
   useEffect(() => {
     onConnectionChange((connected) => {
       setNtStatus(prev => ({ ...prev, connected }));
-
-      if (connected) {
-        setTargets([]);
-      }
     });
 
     initNetworkTables().then((robotConnected) => {
