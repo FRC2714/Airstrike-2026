@@ -273,11 +273,12 @@ function App() {
     return true;
   }, [screenToField, ntStatus.connected, getImageBounds]);
 
-  const handleFieldMouseDown = useCallback((e) => {
-    if (isTouchActiveRef.current) return;
+  const handleFieldPointerDown = useCallback((e) => {
+    if (e.pointerType === 'touch') return;
     if (!fieldRef.current || e.button !== 0) return;
     if (e.target.closest('.hud')) return;
 
+    fieldRef.current.setPointerCapture(e.pointerId);
     const rect = fieldRef.current.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
@@ -358,9 +359,9 @@ function App() {
     setTargets([]);
   }, []);
 
-  // Handle mouse movement to find nearest grid dot and calculate dynamic styles
-  const handleMouseMove = useCallback((e) => {
-    if (isTouchActiveRef.current) return;
+  // Handle pointer movement to find nearest grid dot and calculate dynamic styles
+  const handlePointerMove = useCallback((e) => {
+    if (e.pointerType === 'touch' || isTouchActiveRef.current) return;
     if (!fieldRef.current) return;
 
     const rect = fieldRef.current.getBoundingClientRect();
@@ -386,8 +387,8 @@ function App() {
     setHoveredDot(nearestDot);
   }, [gridDots, setTargetFromScreen]);
 
-  const handleMouseUp = useCallback(() => {
-    if (isTouchActiveRef.current) return;
+  const handlePointerUp = useCallback((e) => {
+    if (e.pointerType === 'touch') return;
     if (isDraggingRef.current) {
       isDraggingRef.current = false;
       isManualOverrideRef.current = false;
@@ -476,18 +477,13 @@ function App() {
       <div
         ref={fieldRef}
         className="field"
-        onMouseDown={handleFieldMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => {
+        onPointerDown={handleFieldPointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => {
           if (isTouchActiveRef.current) return;
           setMousePos(null);
           setHoveredDot(null);
-          if (isDraggingRef.current) {
-            isDraggingRef.current = false;
-            isManualOverrideRef.current = false;
-            setTargets([]);
-          }
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
