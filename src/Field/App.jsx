@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { initNetworkTables, publishTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
 import './App.css';
 
@@ -40,6 +40,7 @@ function App() {
   const fieldRef = useRef(null);
   const isDraggingRef = useRef(false);
   const isManualOverrideRef = useRef(false);
+  const isTouchActiveRef = useRef(false);
 
   const GRID_SPACING = 28;
   const [gridDots, setGridDots] = useState([]);
@@ -48,10 +49,6 @@ function App() {
   useEffect(() => {
     onConnectionChange((connected) => {
       setNtStatus(prev => ({ ...prev, connected }));
-
-      if (connected) {
-        setTargets([]);
-      }
     });
 
     initNetworkTables().then((robotConnected) => {
@@ -87,22 +84,61 @@ function App() {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Compute actual visible image bounds, accounting for object-fit: contain letterboxing
+  const getImageBounds = useCallback(() => {
+    const img = fieldRef.current?.querySelector('img');
+    const container = fieldRef.current;
+    if (!img || !container) return null;
+
+    const imgRect = img.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    if (fieldRotation === 'horizontal') {
+      const naturalW = img.naturalWidth;
+      const naturalH = img.naturalHeight;
+      if (!naturalW || !naturalH) return null;
+
+      const aspectRatio = naturalW / naturalH;
+      const boxW = imgRect.width;
+      const boxH = imgRect.height;
+      const boxAspect = boxW / boxH;
+
+      let contentW, contentH;
+      if (boxAspect > aspectRatio) {
+        contentH = boxH;
+        contentW = boxH * aspectRatio;
+      } else {
+        contentW = boxW;
+        contentH = boxW / aspectRatio;
+      }
+
+      const contentLeft = (imgRect.left - containerRect.left) + (boxW - contentW) / 2;
+      const contentTop = (imgRect.top - containerRect.top) + (boxH - contentH) / 2;
+
+      return { left: contentLeft, top: contentTop, width: contentW, height: contentH };
+    } else {
+      return {
+        left: imgRect.left - containerRect.left,
+        top: imgRect.top - containerRect.top,
+        width: imgRect.width,
+        height: imgRect.height,
+      };
+    }
+  }, [fieldRotation]);
+
   useEffect(() => {
     if (dimensions.width === 0 || dimensions.height === 0) return;
     if (!imageLoaded) return;
 
     // Small delay to ensure CSS transforms have applied
     const timeout = setTimeout(() => {
-      const img = fieldRef.current?.querySelector('img');
-      if (!img) return;
+      const bounds = getImageBounds();
+      if (!bounds) return;
 
-      const imgRect = img.getBoundingClientRect();
-      const containerRect = fieldRef.current.getBoundingClientRect();
-
-      const imgLeft = imgRect.left - containerRect.left;
-      const imgTop = imgRect.top - containerRect.top;
-      const imgRight = imgLeft + imgRect.width;
-      const imgBottom = imgTop + imgRect.height;
+      const imgLeft = bounds.left;
+      const imgTop = bounds.top;
+      const imgRight = imgLeft + bounds.width;
+      const imgBottom = imgTop + bounds.height;
 
       const dots = [];
       for (let x = GRID_SPACING; x < dimensions.width; x += GRID_SPACING) {
@@ -116,7 +152,7 @@ function App() {
     }, 50);
 
     return () => clearTimeout(timeout);
-  }, [dimensions, alliance, fieldRotation, imageLoaded]);
+  }, [dimensions, alliance, fieldRotation, imageLoaded, getImageBounds]);
 
 
   // Convert screen coordinates to field coordinates based on alliance and rotation
@@ -197,38 +233,17 @@ function App() {
     };
   }, [alliance, fieldRotation]);
 
-  // Auto-aim: pick the zone on the same side of the hub as the robot
-  const autoAimTarget = useMemo(() => {
-    const CENTER_Y = FIELD.Y / 2;
-    const zones = ZONES[alliance];
-    if (robotPose.y < CENTER_Y) {
-      // Low-Y side: Red LEFT (y=60.8) or Blue RIGHT (y=57)
-      return alliance === 'red' ? zones.LEFT : zones.RIGHT;
-    } else {
-      // High-Y side: Red RIGHT (y=259) or Blue LEFT (y=263)
-      return alliance === 'red' ? zones.RIGHT : zones.LEFT;
-    }
-  }, [robotPose.y, alliance]);
-
-  // Publish auto-aim target when no manual target is active
-  useEffect(() => {
-    if (targets.length === 0 && !isDraggingRef.current && !isManualOverrideRef.current && ntStatus.connected) {
-      publishTarget({ x: autoAimTarget.x, y: autoAimTarget.y });
-    }
-  }, [autoAimTarget, targets.length, ntStatus.connected]);
 
   const setTargetFromScreen = useCallback((screenX, screenY) => {
     if (!fieldRef.current) return false;
 
-    const containerRect = fieldRef.current.getBoundingClientRect();
-    const img = fieldRef.current.querySelector('img');
-    if (!img) return false;
+    const bounds = getImageBounds();
+    if (!bounds) return false;
 
-    const imgRect = img.getBoundingClientRect();
-    const imgLeft = imgRect.left - containerRect.left;
-    const imgTop = imgRect.top - containerRect.top;
-    const imgRight = imgLeft + imgRect.width;
-    const imgBottom = imgTop + imgRect.height;
+    const imgLeft = bounds.left;
+    const imgTop = bounds.top;
+    const imgRight = imgLeft + bounds.width;
+    const imgBottom = imgTop + bounds.height;
 
     if (screenX < imgLeft || screenX > imgRight || screenY < imgTop || screenY > imgBottom) {
       return false;
@@ -252,12 +267,14 @@ function App() {
 
     setTargets([newTarget]);
     return true;
-  }, [screenToField, ntStatus.connected]);
+  }, [screenToField, ntStatus.connected, getImageBounds]);
 
-  const handleFieldMouseDown = useCallback((e) => {
+  const handleFieldPointerDown = useCallback((e) => {
+    if (e.pointerType === 'touch') return;
     if (!fieldRef.current || e.button !== 0) return;
     if (e.target.closest('.hud')) return;
 
+    fieldRef.current.setPointerCapture(e.pointerId);
     const rect = fieldRef.current.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
@@ -268,6 +285,7 @@ function App() {
     if (!fieldRef.current) return;
     if (e.target.closest('.hud')) return;
 
+    isTouchActiveRef.current = true;
     e.preventDefault();
     const touch = e.touches[0];
     const rect = fieldRef.current.getBoundingClientRect();
@@ -304,6 +322,7 @@ function App() {
   }, [gridDots, setTargetFromScreen]);
 
   const handleTouchEnd = useCallback(() => {
+    isTouchActiveRef.current = false;
     isDraggingRef.current = false;
     isManualOverrideRef.current = false;
     setTargets([]);
@@ -336,8 +355,9 @@ function App() {
     setTargets([]);
   }, []);
 
-  // Handle mouse movement to find nearest grid dot and calculate dynamic styles
-  const handleMouseMove = useCallback((e) => {
+  // Handle pointer movement to find nearest grid dot and calculate dynamic styles
+  const handlePointerMove = useCallback((e) => {
+    if (e.pointerType === 'touch' || isTouchActiveRef.current) return;
     if (!fieldRef.current) return;
 
     const rect = fieldRef.current.getBoundingClientRect();
@@ -363,17 +383,13 @@ function App() {
     setHoveredDot(nearestDot);
   }, [gridDots, setTargetFromScreen]);
 
-  useEffect(() => {
-    const handleMouseUp = () => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        isManualOverrideRef.current = false;
-        setTargets([]);
-      }
-    };
-
-    window.addEventListener('mouseup', handleMouseUp);
-    return () => window.removeEventListener('mouseup', handleMouseUp);
+  const handlePointerUp = useCallback((e) => {
+    if (e.pointerType === 'touch') return;
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      isManualOverrideRef.current = false;
+      setTargets([]);
+    }
   }, []);
 
   // Calculate dynamic styles for grid dots based on mouse and target proximity
@@ -457,16 +473,13 @@ function App() {
       <div
         ref={fieldRef}
         className="field"
-        onMouseDown={handleFieldMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => {
+        onPointerDown={handleFieldPointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={() => {
+          if (isTouchActiveRef.current) return;
           setMousePos(null);
           setHoveredDot(null);
-          if (isDraggingRef.current) {
-            isDraggingRef.current = false;
-            isManualOverrideRef.current = false;
-            setTargets([]);
-          }
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -478,6 +491,22 @@ function App() {
           className={`field-image ${alliance} ${fieldRotation}`}
           onLoad={() => setImageLoaded(true)}
         />
+
+        {(() => {
+          const bounds = getImageBounds();
+          if (!bounds) return null;
+          return (
+            <div
+              className="field-border"
+              style={{
+                left: bounds.left,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+              }}
+            />
+          );
+        })()}
 
         <div className="grid-overlay">
           {gridDots.map((dot, i) => (
@@ -515,23 +544,6 @@ function App() {
           );
         })}
 
-        {targets.length === 0 && autoAimTarget && (() => {
-          const screenPos = fieldToScreen(autoAimTarget.x, autoAimTarget.y);
-          return (
-            <div
-              className="auto-aim-target"
-              style={{
-                left: screenPos.x,
-                top: screenPos.y,
-                zIndex: 90,
-              }}
-            >
-              <div className="auto-aim-ring" />
-              <div className="auto-aim-core" />
-              <div className="auto-aim-label">AUTO</div>
-            </div>
-          );
-        })()}
 
         {(() => {
           const robotScreen = getRobotScreenPosition();
@@ -590,7 +602,7 @@ function App() {
                 <span className="hud-value">
                   {targets.length > 0
                     ? `${targets[0].fieldX.toFixed(1)}", ${targets[0].fieldY.toFixed(1)}"`
-                    : <span className="hud-auto-aim">AUTO {autoAimTarget.x.toFixed(0)}, {autoAimTarget.y.toFixed(0)}</span>
+                    : '--'
                   }
                 </span>
               </div>

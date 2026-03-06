@@ -70,7 +70,6 @@ body {
   object-fit: contain;
   opacity: 0.9;
   pointer-events: none;
-  outline: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .field-image.blue.vertical {
@@ -98,6 +97,13 @@ body {
   transform: translate(-50%, -50%)  rotate(180deg);
 }
 
+
+.field-border {
+  position: absolute;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  z-index: 10;
+}
 
 /* Grid */
 .grid-overlay {
