@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { initNetworkTables, publishTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
+import { initNetworkTables, publishTarget, clearTarget, subscribeToAlliance, subscribeToRobotPose, onConnectionChange, getActiveServer } from '../networktables';
 import './App.css';
 
 const FIELD = {
@@ -174,7 +174,7 @@ function App() {
     if (fieldRotation === 'horizontal') {
       if (alliance === 'blue') {
         fieldX = (1 - relX) * FIELD.X;
-        fieldY = (1 - relY) * FIELD.Y;
+        fieldY = relY * FIELD.Y;
       } else {
         fieldX = relX * FIELD.X;
         fieldY = (1 - relY) * FIELD.Y;
@@ -182,7 +182,7 @@ function App() {
     } else {
       if (alliance === 'blue') {
         fieldX = (1 - relY) * FIELD.X;
-        fieldY = relX * FIELD.Y;
+        fieldY = (1 - relX) * FIELD.Y;
       } else {
         fieldX = relY * FIELD.X;
         fieldY = relX * FIELD.Y;
@@ -211,7 +211,7 @@ function App() {
     if (fieldRotation === 'horizontal') {
       if (alliance === 'blue') {
         relX = 1 - fieldX / FIELD.X;
-        relY = 1 - fieldY / FIELD.Y;
+        relY = fieldY / FIELD.Y;
       } else {
         relX = fieldX / FIELD.X;
         relY = 1 - fieldY / FIELD.Y;
@@ -219,7 +219,7 @@ function App() {
     } else {
       // Vertical
       if (alliance === 'blue') {
-        relX = fieldY / FIELD.Y;
+        relX = 1 - fieldY / FIELD.Y;
         relY = 1 - fieldX / FIELD.X;
       } else {
         relX = fieldY / FIELD.Y;
@@ -326,6 +326,7 @@ function App() {
     isDraggingRef.current = false;
     isManualOverrideRef.current = false;
     setTargets([]);
+    clearTarget();
     setMousePos(null);
     setHoveredDot(null);
   }, []);
@@ -353,6 +354,7 @@ function App() {
   const handleClearTarget = useCallback(() => {
     isManualOverrideRef.current = false;
     setTargets([]);
+    clearTarget();
   }, []);
 
   // Handle pointer movement to find nearest grid dot and calculate dynamic styles
@@ -389,6 +391,7 @@ function App() {
       isDraggingRef.current = false;
       isManualOverrideRef.current = false;
       setTargets([]);
+      clearTarget();
     }
   }, []);
 
