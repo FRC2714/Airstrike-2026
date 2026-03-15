@@ -9,6 +9,7 @@ const CONFIG = {
 let ntClient = null;
 let targetXTopic = null;
 let targetYTopic = null;
+let hasTargetTopic = null;
 let allianceTopic = null;
 let connectionCallback = null;
 let activeServer = '';
@@ -51,10 +52,13 @@ export async function initNetworkTables() {
 
   targetXTopic = ntClient.createTopic('/SmartDashboard/airstrike/x', NetworkTablesTypeInfos.kDouble);
   targetYTopic = ntClient.createTopic('/SmartDashboard/airstrike/y', NetworkTablesTypeInfos.kDouble);
+  hasTargetTopic = ntClient.createTopic('/SmartDashboard/airstrike/hasTarget', NetworkTablesTypeInfos.kBoolean);
   allianceTopic = ntClient.createTopic('/FMSInfo/IsRedAlliance', NetworkTablesTypeInfos.kBoolean);
 
   await targetXTopic.publish({ defaultValue: 0 });
   await targetYTopic.publish({ defaultValue: 0 });
+  await hasTargetTopic.publish({ defaultValue: false });
+  hasTargetTopic.setValue(false);
 
   // Register connection listener AFTER topics are published so
   // callbacks that fire on connect can safely call setValue.
@@ -64,6 +68,7 @@ export async function initNetworkTables() {
       // Re-publish topics on reconnect so setValue works
       targetXTopic.publish({ defaultValue: 0 });
       targetYTopic.publish({ defaultValue: 0 });
+      hasTargetTopic.publish({ defaultValue: false });
     }
     if (connectionCallback) {
       connectionCallback(connected);
@@ -83,24 +88,20 @@ export function onConnectionChange(callback) {
 }
 
 export function publishTarget(target) {
-  if (!targetXTopic || !targetYTopic) {
+  if (!targetXTopic || !targetYTopic || !hasTargetTopic) {
     console.warn('Topics not ready');
     return;
   }
 
-  try {
-    targetXTopic.setValue(target.x);
-    targetYTopic.setValue(target.y);
-  } catch (e) {
-    console.warn('publishTarget failed (topic not yet published):', e.message);
-  }
+  targetXTopic.setValue(target.x);
+  targetYTopic.setValue(target.y);
+  hasTargetTopic.setValue(true);
 }
 
 export function clearTarget() {
-  if (!targetXTopic || !targetYTopic) return;
+  if (!hasTargetTopic) return;
 
-  targetXTopic.setValue(0);
-  targetYTopic.setValue(0);
+  hasTargetTopic.setValue(false);
 }
 
 export function subscribeToAlliance(callback) {
